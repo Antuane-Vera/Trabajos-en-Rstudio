@@ -1,0 +1,558 @@
+---
+title: "Tidyverse: Un complemento"
+date: "24 de octubre del 2023"
+output:
+  rmdformats::robobook:
+    highlight: kate
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+
+# Stringr: Expresiones regulares
+
+Paquete que proporciona una serie de funciones consistentes y de fácil uso para realizar operaciones comunes y necesarias en el manejo de texto, como la detección, manipulación y sustitución de cadenas.
+
+## Regex
+
+Antes, repasemos un poco sobre las expresiones regulares. 
+
+En el link https://regexr.com/ vas a pegar el siguiente texto:
+
+*Tidyverse es una colección de paquetes en R orientados a la ciencia de datos. Entre los más destacados están ggplot2 para visualización, dplyr para manipulación de datos, y readr para la lectura de archivos. La versión 2.1.0 de Tidyverse, lanzada en mayo de 2023, trajo mejoras significativas, especialmente en ggplot2 y tidyr, este último esencial para reestructurar datos. La función mutate() en dplyr y pivot_longer() en tidyr son ampliamente utilizadas para transformar conjuntos de datos. Tidyverse es reconocido por su capacidad de simplificar complejas tareas de análisis de datos. Para más información, visita www.tidyverse-example.com o contacta a info@tidyverse.com. Sigue las actualizaciones en Twitter a través de @TidyverseNews.*
+
+*El ecosistema de Tidyverse no solo incluye paquetes para el manejo de datos, sino también para reportes y comunicación de resultados, como rmarkdown y shiny. En la conferencia anual Tidyverse_Connect de 2023, hubo un enfoque especial en la integración de shiny con ggplot2. La función filter() en dplyr y ggplot() en ggplot2 fueron destacadas por su eficacia. Además, la comunidad global de Tidyverse ha contribuido con numerosos tutoriales en varios idiomas, facilitando su aprendizaje y adopción por científicos de datos en todo el mundo. Encuentra guías y recursos en www.resources-tidyverse.com y sigue las discusiones en Twitter con @DataSciTidyverse.*
+
+
+Vamos a escribir la expresión regular para:
+
+- Todos los números. 
+
+- Todas las palabras en Mayúsculas
+
+- Todas las palabras terminadas en "s"
+
+- Los nombre de todas las funciones. Pj: funcion()
+
+- Encontrar todas las versiones de software
+
+
+
+```{r message=FALSE, warning=FALSE}
+link="https://github.com/ChristianChiroqueR/Diplomado-2021---R-Intermedio/raw/main/Sesi%C3%B3n%202%20-%20Tidyverse/regex.xlsx"
+library(rio)
+regex<-import(link)
+```
+
+
+```{r}
+View(regex)
+```
+
+Podemos identificar los patrones con str_view(). Comencemos con una letra en particular. 
+
+```{r}
+regex$Texto |> str_view("a")
+```
+
+Ahora busquemos los dígitos 
+
+```{r}
+regex$Texto |> str_view("\\d") # Recuerda que es alt+92
+```
+
+Podemos usar str_detect() para que nos muestre un "indicador" de presencia del patrón:
+
+```{r}
+regex$Texto |> str_detect("\\d") #Nos servirá cuando usemos filtros
+```
+
+Si queremos que sólo nos muestre los casos que cumple el patrón utilizamos str_subset():
+
+```{r}
+regex$Texto |> str_subset("\\d") # Similara a la función grep()
+```
+
+A veces puede haber símbolos especiales:
+
+```{r}
+regex$Texto |> str_view("\\(")
+regex$Texto |> str_view("@")
+regex$Texto |> str_view("\"")
+```
+
+Si queremos buscar páginas web podríamos solicitar aquellos que comiencen con "www" seguido de un punto:
+
+```{r}
+regex$Texto |> str_view("^www.")
+```
+
+Cómo haríamos para detectar los usuarios de twitter?
+
+```{r}
+regex |>
+  filter(str_detect(Texto,"\\s@")) # Lo utilizamos como un condicional
+```
+
+Podemos identificar patrones y reemplazar:
+
+```{r}
+regex |>
+  filter(str_detect(Texto,"[Tt]res")) |> 
+  str_replace("[Tt]res", "3")
+```
+
+También podemos ver repeticiones:
+
+```{r}
+numero<-"1888 es el número más largo en romano: MDCCCLXXXVIII"
+```
+
+?: 0 o 1
++: 1 o más
+*: 0 o más
+
+```{r}
+str_view(numero, "CC?")
+```
+
+```{r}
+str_view(numero, "CC+")
+```
+
+```{r}
+str_view(numero, 'C[LX]+')
+```
+
+## Ejemplo 1: Extraer los títulos
+
+Vemos la data
+
+```{r message=FALSE, warning=FALSE}
+#install.packages("titanic")
+library(titanic)
+df = titanic_train
+df= df |> slice(1:30)
+```
+
+```{r}
+head(df$Name)
+```
+
+Primero, guardemos una nueva variable pero en minúscula. Esto nos evitará futuros problemas, así como aliviará el tamaño del código al redactar. 
+
+```{r}
+df$name_min <- str_to_lower(df$Name)
+df$name_min
+```
+
+Primero buscamos extraer el título de la persona. Para ello, **analicemos** el texto, busquemos los patrones que están presentes en todos los títulos de las personas. 
+ 
+Identificamos que el patrón es 
+
+- Texto que tenga al menos una letra (\\w+)
+- Después del texto haya un punto (?=\\.)
+
+Una vez identificado el patrón podemos trabajar sobre la cadena:
+
+```{r}
+head(df$name_min)
+```
+
+Primero corroboramos que nuestro fraseo del patrón esté correcto con la función str_view():
+
+```{r}
+str_view(df$name_min, "\\w+\\.")
+```
+
+Resalta lo que queremos? Entonces procedemos a extraer esa parte en una nueva cadena:
+
+```{r}
+df$titulo= str_extract(df$name_min, "\\w+\\.")
+```
+
+Ahora exploremos la nueva variable creada:
+
+```{r}
+df |> 
+  count(titulo) |> 
+  arrange(desc(n))
+```
+
+## Ejemplo 2: El apellido (o el nombre de la familia)
+
+Veamos nuevamente la cadena original
+
+```{r}
+head(df$name_min)
+```
+
+En general, lo primero que vemos es que el apellido está antes que la coma. 
+
+Eso nos daría la siguiente expresión:
+
+```{r}
+str_extract(df$name_min,"\\w+(?=\\,)")
+```
+
+Pero qué pasa con el caso 29? O'Dwyer? Para ello podemos modificarlo de la siguiente manera:
+
+```{r}
+str_extract(df$name_min,"[\\w']+(?=\\,)")
+```
+
+Debemos solicitar el texto que esté antes de la coma (,):
+
+```{r}
+df$apellido=str_extract(df$name_min,"[\\w']+(?=\\,)")
+```
+
+Veamos entonces:
+
+```{r}
+df |> count(apellido) |> arrange(desc(n))
+```
+
+Otra forma más fácil podría ser utilizar la coma como un **separador**. Creamos dos substrings 
+
+```{r}
+str_split(df$name_min,"\\,", simplify = T )
+```
+
+y nos quedamos con la primera. 
+
+```{r}
+str_split(df$name_min,"\\,", simplify = T )[,1]
+```
+
+
+## Ejemplo 3:Extraer las direcciones
+
+```{r}
+variable_string <- c("La película gustó mucho a la audiencia",
+       "El trabajo está en un 35.1% de ejecución",
+       "La computadora abrió el archivo",
+       "El domingo es la mejor parte de la semana.",
+       "El primer gran buscador fue www.yahoo.com",
+       "Instalaron azulejos verdes en la cocina. Están al 4.87%",
+       "Cumplió con la tarea en un 98%",
+       "Rotten tomatoes le dió a la película NWH un 100%",
+       "El buscador más potente es www.google.com",
+       "Sofía se llevó los lentes de sol y los parlantes",
+       "Cuando subía las gradas tuvo un problema",
+       "Se fue pateando latas",
+       "Los días fueron muy divertidos")
+data<-as.data.frame(variable_string)
+```
+
+
+Vemos aquellas que terminan en .com
+
+```{r}
+data$variable_string |> str_view(".com")
+```
+
+Con 1 o más letras antes:
+
+```{r}
+data$variable_string |> str_view("[\\w]+.com")
+```
+
+Y que también considere puntos:
+
+```{r}
+data$variable_string |> str_view("[\\w\\._-]+.com")
+```
+
+Deseo lo que comienza por un www.:
+
+```{r}
+data$variable_string |> str_view("www[\\w\\._-]+.com")
+```
+
+
+## Ejemplo 4: Extraer los artículos
+
+La, las, el, los:
+
+```{r}
+data$variable_string |> str_view("la")
+data$variable_string |> str_view("las")
+data$variable_string |> str_view("el")
+data$variable_string |> str_view("los")
+```
+
+Tienen algo en común? Se podría solicitar en una sola regex los artículos?
+
+Consejo: La ubicación va al final. 
+
+Que tenga un espacio antes
+
+```{r}
+data$variable_string |> str_view("\\bla")
+```
+
+Que tenga un espacio después
+
+```{r}
+data$variable_string |> str_view("\\bla\\b")
+```
+
+Que sea el o la. El contabilizador "?". Por qué?
+
+```{r}
+data$variable_string |> str_view("\\be?la?\\b")
+```
+
+La "s" de las:
+
+```{r}
+data$variable_string |> str_view("\\be?la?s?\\b")
+```
+
+Que sea las o los:
+
+```{r}
+data$variable_string |> str_view("\\be?l[ao]?s?\\b")
+```
+
+Los primeros:
+
+```{r}
+data$variable_string |> 
+  str_view_all("^[Ee]?[lL][ao]?s?\\b|\\be?l[ao]?s?\\b")
+```
+
+## Ejemplo 5: Extraer los números
+
+Queremos extraer el número que indica el porcentaje. Qué debemos hacer?
+
+Pedimos el dígito:
+
+```{r}
+data$variable_string |> str_view("\\d")
+```
+
+Pedimos el dígito antes del signo "%":
+
+```{r}
+data$variable_string |> str_view("\\d(?=\\%)")
+```
+
+Nos damos cuenta que el número puede tener y no puede tener un decimal (de al menos un dígito). 
+
+Pero siempre tiene al menos un dígito antes del punto. 
+
+Vemos la primera parte
+
+```{r}
+data$variable_string |> str_view("\\d+\\.")
+```
+
+La segunda
+
+```{r}
+data$variable_string |> str_view("\\d+(?=\\%)")
+```
+
+Regex final
+
+```{r}
+data$variable_string |> str_view("\\d+\\.\\d+(?=\\%)")
+```
+
+Ponemos que el punto sea condicional. 
+
+```{r}
+data$variable_string |> str_view("\\d+\\.?\\d+(?=\\%)")
+```
+
+```{r}
+data |> filter(str_detect(variable_string,"\\d+\\.?\\d+(?=\\%)"))
+```
+
+
+
+# Tidyr
+
+Paquete que se enfoca en la transformación de datos para lograr un formato "tidy", en el cual cada variable forma una columna, cada observación forma una fila, y cada tipo de unidad observacional forma una tabla.
+
+Algunas de las funciones más frecuentes: pivot_longer(), pivot_wider()
+
+
+## pivot_longer(): Se aumentan filas, disminuyen columnas
+
+La función pivot_longer() del paquete tidyr en R se utiliza para transformar datos de un formato ancho a un formato largo. Esta función es especialmente útil cuando se trabaja con conjuntos de datos donde múltiples columnas representan la misma variable y se desea consolidarlas en una sola columna.
+
+
+El conjunto de datos relig_income contiene información sobre la distribución del ingreso en diferentes grupos religiosos en los Estados Unidos. Las filas representan distintos grupos religiosos, como Protestantes, Católicos, Judíos, entre otros, mientras que las columnas representan rangos de ingresos anuales, desde "<$10k" hasta ">$100k". Cada celda de la tabla muestra el número de personas de un grupo religioso específico que cae dentro de un determinado rango de ingreso. 
+
+
+```{r}
+relig_income
+```
+
+Ahora utilizamos pivot_longer() para disminuir el número de columnas y unirlas en una sola. Obsérvese que al realizar dicha operación el número de filas aumenta. 
+
+```{r}
+relig_income %>%  # Toma el dataframe relig_income
+  pivot_longer(
+    cols = !religion,  # Selecciona todas las columnas excepto 'religion' para pivotear. El signo '!' excluye la columna 'religion'.
+    names_to = "Ingreso",  # Crea una nueva columna llamada 'Ingreso', donde se almacenarán los nombres de las columnas originales.
+    values_to = "Frecuencia"  # Crea una nueva columna llamada 'Frecuencia', donde se almacenarán los valores correspondientes a cada rango de ingreso.
+  )
+```
+
+
+Es bastante útil cuando, por ejemplo, se desean trabajar con series de tiempo. 
+
+
+## pivot_wider(): Se disminuyen filas, aumentan columnas
+
+
+Es esencialmente la operación inversa de pivot_longer(). Esta función es útil cuando se tiene un conjunto de datos en el cual una variable está distribuida a lo largo de varias filas y se desea reorganizar estos datos en un formato donde cada valor de esta variable ocupe una columna separada.
+
+```{r}
+library(gapminder)
+View(gapminder)
+```
+
+Inicialmente tenemos varios valores en una columna. Un caso común consiste en las mediciones que se pueden realizar de un mismo caso en varios años/momentos. 
+
+```{r}
+gapminder |> 
+  select(country, year, lifeExp)
+```
+
+Cada año, se convierte en una columna que puede ser facilmente manipulable. 
+
+```{r}
+gapminder |> 
+  select(country, year, lifeExp) |> 
+  pivot_wider(names_from = year, # Los nombres de las nuevas columnas vienen de la columna 'year'
+              values_from = lifeExp # Los valores en estas columnas provienen de la columna 'lifeExp'
+              )
+```
+
+
+
+# Lubridate
+
+```{r}
+library(lubridate)
+```
+
+
+Ofrece funciones intuitivas y consistentes que permiten a los usuarios analizar y manipular información temporal de manera más eficiente y precisa.
+
+Algunas de las funciones más frecuentes: ymd(), mdy(), dmy(), duration()
+
+## ymd(), mdy(), dmy()
+
+Estas funciones son útiles para estandarizar y manipular fechas en análisis de datos, facilitando el trabajo con distintos formatos de fecha que se pueden encontrar en conjuntos de datos.
+
+
+```{r}
+fechas_ymd <- c("2020-03-25", "2022-04-26", "2021-05-27")
+str(fechas_ymd)
+
+fechas_ymd <-ymd(fechas_ymd)
+str(fechas_ymd)
+```
+
+
+## Extraer días, meses y años. 
+
+Crean objetos de "periodo" que representan periodos de tiempo en términos de años, meses y días, respectivamente.
+
+```{r}
+year(fechas_ymd)
+month(fechas_ymd)
+day(fechas_ymd)
+```
+
+## Calcular la diferencia
+
+Podemos calcular la diferencia en días entre cada fecha y la fecha actual, por ejemplo:
+
+```{r}
+diferencia_dias <- Sys.Date() - fechas_ymd
+diferencia_dias
+```
+
+## Extraer el día de la semana para una fecha
+
+```{r}
+wday(fechas_ymd, label = TRUE)
+```
+
+
+# Dplyr y data relacionada: Mutating join
+
+Una base de datos relacional es un tipo de base de datos que almacena y proporciona acceso a puntos de datos relacionados entre sí. Estas bases de datos están organizadas en tablas, y cada tabla contiene filas y columnas. Las filas en la tabla representan registros, mientras que las columnas representan atributos o características de estos registros. La principal característica de las bases de datos relacionales es su capacidad para relacionar datos de diferentes tablas entre sí.
+
+En este contexto, los "mutating joins" (uniones que mutan) son un tipo de operación de unión que combina dos data frames (conjuntos de datos) basándose en una o más claves comunes, y luego extiende o "muta" el primer data frame con las columnas del segundo. Estas operaciones son muy útiles para combinar datos relacionados que están almacenados en diferentes tablas.
+
+
+```{r}
+# Creación unas bases de datos de prueba
+base_de_datos_1 <- data.frame(
+  ID = 1:10,
+  Nombre = c("Ana", "Beto", "Carla", "David", "Elena", "Fernando", "Gloria", "Hugo", "Irene", "Julio"),
+  Edad = seq(25, 70, by = 5)
+)
+
+base_de_datos_2 <- data.frame(
+  ID = seq(1, 19, by = 2),
+  Ciudad = paste("Ciudad", LETTERS[1:10]),
+  Ingreso = seq(50000, 95000, by = 5000)
+)
+```
+
+```{r}
+base_de_datos_1
+base_de_datos_2
+```
+
+
+## inner_join
+
+Este tipo de join retorna solo aquellas filas que tienen un ID coincidente en ambas bases de datos.
+
+```{r}
+inner_join(base_de_datos_1, base_de_datos_2, by = "ID")
+```
+
+## left_join
+
+Este tipo de join retorna todas las filas de la primera base de datos (base_de_datos_1), y las filas coincidentes de la segunda base de datos (base_de_datos_2). Si no hay coincidencias, los campos de la segunda base de datos serán NA.
+
+```{r}
+left_join(base_de_datos_1, base_de_datos_2, by = "ID")
+```
+
+## right_join
+
+Retorna todas las filas de la segunda base de datos (base_de_datos_2), y las filas coincidentes de la primera base de datos (base_de_datos_1). Si no hay coincidencias, los campos de la primera base de datos serán NA.
+
+```{r}
+right_join(base_de_datos_1, base_de_datos_2, by = "ID")
+```
+
+## full_join
+
+Este tipo de join combina todas las filas de ambas bases de datos. Si hay filas en base_de_datos_1 que no tienen una coincidencia en base_de_datos_2, o viceversa, esas filas también se incluirán con NA en los campos que no tengan datos.
+
+```{r}
+full_join(base_de_datos_1, base_de_datos_2, by = "ID")
+```
+
+
+
+
+
+

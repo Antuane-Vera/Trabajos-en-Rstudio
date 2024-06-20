@@ -1,0 +1,185 @@
+---
+title: "Ejercicio Práctico 1"
+author: "Joel Andre Visurraga Rodil"
+date: "2023-12-02"
+output: html_document
+---
+
+## Pregunta A)
+
+Importe la base de datos, asegúrese que el objeto creado sea un tibble y tenga como nombre "covid1"
+
+```{r}
+## Previamente instalados, cargamos los paquetes "dplyr" y "readxl" para poder leer la base de datos
+library(dplyr)
+library(readxl)
+
+## Nombramos la data como "covid1"
+covid1 <- read.csv("data_covid.csv")
+```
+
+```{r}
+## Revisamos si la data es un tibble
+class(covid1)
+```
+
+```{r}
+## Al ver que la data es un data.frame, convertimos la data a un tibble
+covid1 <- as_tibble(covid1)
+covid1
+```
+
+## Pregunta B)
+
+Describa brevemente la data (tipo de variables, número de casos, etc.)
+
+```{r}
+## Utilizamos "glimpse" para obtener un resumen conciso de la estructura de la data covid1
+glimpse(covid1)
+```
+
+Identificamos que la data covid1 tiene 679,699 casos y 13 variables. Asimismo, existen 4 variables que son de tipo integer y 9 variables que son de tipo character. Entre las variables encontramos datos como fecha corte, uuid, grupo de riesgo, edad, sexo, fecha de vacunación, dosis, fabricante, diresa, departamento, provincia, distrito y fecha.
+
+## Pregunta C)
+
+Cree una nueva data que agregue los datos según fecha para saber el total de vacunados por día. Asígnele como nombre "covid2"
+
+```{r}
+## Primero, convertimos las variables al tipo de dato que necesitamos para realizar las estimaciones
+covid1$FECHA_VACUNACION = as.numeric(covid1$FECHA_VACUNACION)
+covid1$fecha = as.factor(covid1$fecha)
+covid1$DOSIS = as.factor(covid1$DOSIS)
+covid1$EDAD = as.numeric(covid1$EDAD)
+```
+
+```{r}
+## Luego, creamos la nueva data "covid2"
+covid2 <- covid1 |> 
+  arrange(desc(fecha)) ## Adicionalmente organizamos la data en orden descendiente para una mejor visualización
+
+covid2
+```
+
+```{r}
+## Entonces, usamos "count" para contar la frecuencia de los valores de la variable "fecha" para determinar el total de vacunados por día
+covid2 |>
+  count(fecha)
+```
+
+## Pregunta D)
+
+¿Qué día se realizó la mayor cantidad de vacunas en Apurímac? Responda utilizando los verbos de paquete dplyr. Utilice el operador pipe en su fraseo
+
+```{r}
+## Para responder la pregunta, se utilizan las funciones "count" y "arrange" en orden descendiente del paquete dplyr. Adicionalmente, se usa el operador pipe en el fraseo
+covid2 |>
+  count(fecha) |>
+  arrange(desc(n))
+
+```
+
+En este sentido, podemos identificar que se realizó la myor cantidad de vacunas en Apurímac el día 28 de agosto de 2021, registrando 7774 vacunas aplicadas.
+
+## Pregunta E)
+
+¿Cuáles son los cinco distritos que tiene una mayor población vacunada con la 3ra dosis (top 5)?
+
+```{r}
+## Para responder a la pregunta, se realiza lo siguiente:
+covid2 |>
+  group_by(DISTRITO) |> ## agrupo según el distrito
+  count(DOSIS) |> ## cuento las vacunas realizadas en cada distrito por dosis 1,2,3
+  filter(DOSIS == "3") |> ## filtro los distritos con población vacunada con la 3era dosis
+  arrange(desc(n)) |> ## organizo la data en orden descendiente
+  head(5) ## visualizo solo el top 5
+
+```
+
+En esa línea, entre los 5 distritos con mayor población vacunada con 3 dosis tenemos a: Abancay (11805), Andahuaylas (5833), Talavera (2264), San Jerónimo (2005) y Tamburco (1870).
+
+## Pregunta F)
+
+Explore y presente los principales estadísticos descriptivos (tendencia central y dispersión) de la variable edad. Brinde un análisis
+
+```{r}
+# Media de la variable "edad"
+covid2 |>
+  summarise(Media_Edad = mean(na.omit(EDAD)))
+```
+
+```{r}
+# Mediana de la variable "edad"
+covid2 |>
+  summarise(Mediana_Edad = median(na.omit(EDAD)))
+```
+
+Podemos identificar que entre los estadísticos descriptivos de tendencia central tenemos los siguientes resultados: - Media: el promedio de edad de personas que se vacunaron en el departamento de Apurímac es de 41 años. - Mediana: 38 años es la edad que se encuentra en el medio del rango de edades de personas que se vacunaron en el departamento de Apurímac - Moda: no se aplicó debido a falta de una función aún no explorada
+
+```{r}
+# Varianza de la variable "edad"
+covid2 |>
+  summarise(Varianza_Edad = var(na.omit(EDAD)))
+```
+
+```{r}
+# Desviación Estándar de la variable "edad"
+covid2 |>
+  summarise(Desviación_Estándar_Edad = sd(na.omit(EDAD)))
+```
+
+Podemos identificar que entre los estadísticos descriptivos de dispersión tenemos los siguientes resultados: - Varianza: las edades de las personas que se vacunaron en el departamento de Apurímac poseen una dispersión considerable de 382.7292 - Desviación estándar: la desviación estándar de 19.56 resulta una dispersión moderada alrededor de la media del rango de edades de personas que se vacunaron en el departamento de Apurímac
+
+## Pregunta G)
+
+A partir de variable Edad, genere una nueva variable que sea etapa de vida bajo el siguiente esquema: aquellos que sean menores de 30 son "jóvenes", aquellos que son menores de 60 son "adultos" y aquellos que son mayores de 60 son "adultos mayores". Genere una tabla de resumen de esta variable en la que aparezca frecuencia y proporción.
+
+```{r}
+## Genero la variable "Etapa_de_vida" usando el verbo "mutate" del paquete dplyr. Asimismo, se utiliza el verbo "case_when" para asignar las condiciones de los casos en esta nueva variable
+covid2 <- covid2  |>
+  mutate(Etapa_de_vida=
+           case_when(EDAD<30~"jóvenes",
+                     EDAD<60~"adultos",
+                     TRUE   ~"adultos mayores"))
+```
+
+```{r}
+library(gtsummary)
+covid2 |>
+  select(EDAD, Etapa_de_vida)  |>
+  tbl_summary()
+```
+
+En síntesis, la tabla presenta una frecuencia de 234410 personas vacunadas en el departamento de Apurímac que tienen menos de 30 años (jóvenes); 312851 personas con menos de 60 años (adultos); y 132438 personas con más de 60 años (adultos mayores).
+
+En el caso de la proporción, la población adulta representa el 46% de la población total de personas vacunadas en el departamento de Apurímac; mientras que los jóvenes representan el 34%; y los adultos 19%.
+
+## Pregunta H)
+
+Genere una variable que asigne el valor de 1 si la persona pertenece al grupo de riesgo "POBLACIÓN INDÍGENA" y 0 si no pertenece. Cuente cuántos casos de éxito se presentan en la data. Llame a esta variable ES_POB_IND.
+
+```{r}
+## Genero la variable "ES_POB_IND" usando el verbo "mutate" del paquete dplyr. Asimismo, se utiliza el verbo "case_when" para asignar las condiciones de los casos en esta nueva variable
+covid2 <- covid2 |>
+  mutate(ES_POB_IND = 
+           case_when(GRUPO_RIESGO== "POBLACION INDIGENA"~ 1,
+                     TRUE   ~ 0))
+```
+
+```{r}
+## Se cuenta el número de casos de éxito
+covid2 |>
+  count(ES_POB_IND)
+```
+
+Así, identificamos 4761 personas provenientes de pueblos indígenas que fueron vacunados en el departamento de Apurímac.
+
+## Pregunta I)
+
+Genere una tabla gtsummary para las variables edad, sexo, etapa de vida y ES_POB_IND.
+
+```{r}
+## Utilizamos la función "tbl_summary" y seleccionamos las variables indicadas
+covid2 |>
+  select(EDAD, SEXO, Etapa_de_vida, ES_POB_IND)  |>
+  tbl_summary()
+```

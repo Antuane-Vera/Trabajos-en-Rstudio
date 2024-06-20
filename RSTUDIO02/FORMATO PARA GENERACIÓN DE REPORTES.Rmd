@@ -1,0 +1,74 @@
+---
+title: "Formato de reporte"
+date: "19/11/2023"
+output:
+  rmdformats::robobook:
+    highlight: kate
+---
+
+```{r}
+#install.packages("rmdformats")
+```
+
+# MODELO DE REPORTE BÁSICO EN RMD
+
+## CÓMO AGREGAR TEXTO
+
+Texto normal
+
+**Texto en negrita**
+
+*Texto en cursiva*
+
+## CÓMO AGREGAR CÓDIGO
+
+### LOS CHUNKS
+
+En el Rmd, a diferencia del R Script, debes incluir R dentro de un `chunk`.
+
+Para eso puedes incluir con el botón que se encuentra arriba a la derecha. O también presionando Ctrl + Alt + I
+
+```{r}
+summary(cars)
+```
+
+Ten en cuenta que dentro de cada chunk puedes comentar de la misma manera que lo hacía en el R Script. Usando `#`:
+
+```{r}
+#Este es un comentario y no se ejecuta
+summary(cars)
+```
+
+### PERSONALIZANDO LOS CHUNKS
+
+Aquí puedes ver un chunk normal que presenta código y resultado (output). Sin embargo, puedes editar esto dándole click al engranaje que se encuentra arriba a la derecha del mismo chunk.
+
+```{r}
+summary(cars)
+```
+
+Puedes mostrar sólo el resultado y no visualizar el código.
+
+```{r echo=FALSE}
+summary(cars)
+```
+
+
+También tienes otras opciones interesantes como:
+
+"No mostrar nada y correr el código": Esto te sirve cuando por ejemplo deseas abrir una data y no quieres que se muestre el código. 
+
+"No mostrar nada y no correr el código": Cuando has anotado un código en tu RMD que no necesitas correrlo pero sí quieres que quede en tu reporte a modo de información o explicación. 
+
+
+## OTROS OPCIONES INTERESANTES
+
+### IMAGEN
+
+![](https://d33wubrfki0l68.cloudfront.net/fb9d9abda3be41ff0159fa0786cecfafcc2ed073/ca334/lesson-images/dashboards-1-dashboard.png)
+
+### LINKS
+
+[LINK DE LA PUCP](https://www.pucp.edu.pe/)
+
+

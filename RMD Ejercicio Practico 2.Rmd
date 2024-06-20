@@ -1,0 +1,244 @@
+---
+title: "Ejercicio Práctico 2"
+author: "Antuané Vera"
+date: "2023-12-14"
+output: html_document
+---
+#Ejercicio Práctico 2
+
+
+##Pregunta 1
+
+La base de datos del Global Terrorism Database (GTD) es una de las bases de datos más extensas y completas sobre actos de terrorismo a nivel mundial. Incluye información sobre incidentes terroristas que han ocurrido a nivel mundial desde 1970 hasta 2018. Esta base de datos incorpora más de 180,000 casos, proporcionando detalles sobre la fecha y ubicación del ataque, el tipo de ataque, el objetivo, y otras variables relacionadas.
+
+Utilizando el archivo actos_terroristas_2.csv responda lo siguiente:
+
+###Pregunta A)
+Importe la base de datos, asegúrese que el objeto creado sea un tibble y tenga como nombre “terrorismo” (1 pts). 
+
+```{r}
+library(readr)
+terrorismo <- read_csv("C:/Users/antua/Downloads/actos_terroristas_2.csv")
+View(terrorismo) #utilizamos la libreria readr para leer el archivo
+```
+
+```{r}
+#vemos el tipo de data que es
+class(terrorismo)
+```
+
+```{r}
+library(tibble) #Se descarga el paquete tibble y luego se lo llama con la función library
+terrorismo <- as_tibble(terrorismo) #con la función tibble se convierte al data frame en tibble
+class(terrorismo)
+```
+Ya se encuentra como tibble
+
+```{r}
+names(terrorismo) #evaluamos cuales son las variables que tiene
+```
+
+```{r}
+glimpse(terrorismo) #analizamos estas variables y como lo lee R
+```
+
+
+###Pregunta B)
+Presente una tabla simple del número de ataques por año ordenada de mayor a menor. ¿Cuál fue el año con mayor número de ataques terroristas, cuántos hubo? (2pt).
+
+```{r}
+terrorismo$iyear = as.factor(terrorismo$"iyear")
+#convertimos la variable año en factor, para que R lo reconozca como factor y nos permita contarlo posteriormente
+```
+
+```{r}
+library(dplyr)
+terrorismo |>
+  count(iyear) #con la función count contamos la frecuencia de la variable años
+```
+
+```{r}
+
+terrorismo |> 
+  group_by(iyear) |> 
+  count(iyear) |> 
+  arrange(desc(n))
+
+#creamos una tabla donde agrupamos mediante la variable año, posteriormente le agregamos la función contar, por último damos la orden de que el arreglo sea descendiente 
+```
+ En base a la data podemos observar que el año en el que hubo más actos terroristas fue en el 2014, con un total de 16903	actos . 
+ 
+
+###Pregunta C)
+Presente el top 5 de países con el mayor número de ataques terroristas en todo este periodo (2 pts)
+
+ 
+```{r}
+#Para presentar la lista de los 5 países repetimos el código pero le añadimos la función head () por lo que solo nos mostrara la cantidad que pongamos entre parentesis
+terrorismo |> 
+  group_by(iyear) |> 
+  count(iyear) |> 
+  arrange(desc(n))|> 
+  head(5)
+```
+Los años con mayor presencia de actos de terrorismo han sido los años 2014, 2015, 2016, 2013 y 2017
+
+###Pregunta D)
+Presente un gráfico de línea para visualizar la evolución del número de ataques por año a nivel mundial. Coloque como título “Evolución del número de ataques terroristas según continente” ¿Qué puede visualizar en el gráfico? (3 puntos)
+
+```{r}
+terrorismoYEAR <- terrorismo |>
+  group_by(iyear) |>
+  mutate(nueva_variable = n())
+print(terrorismoYEAR)
+#Para generar un gráfico en relación a la frecuencia de ataques terroristas, primero creo otra base de datos con la nueva variable "nueva_variable" que será la frecuencia de la variable iyear. 
+```
+
+
+```{r}
+library(ggplot2)
+terrorismoYEAR |>
+  group_by(iyear) |>
+  ggplot() +
+  aes(x = iyear) +
+  aes(y = nueva_variable) +
+  geom_point() +
+  aes(color= continente) +
+  geom_smooth() 
+  labs(title = "Evolución del número de ataques terroristas", x = "Año", y = "Cantidad de casos")
+  #Creamos un gráfico de puntos con la variable iyear y la nueva_variable. Además, le añadimos la variable continente para identificar donde se dan la mayor cantidad de casos. Le pusimos por titulo "Evolución del número de ataques terroristas"
+```
+Para poder hacer el grafíco con líneas es necesario pasar la variable iyear de factor a númerico.
+```{r}
+  terrorismo |>
+    mutate(iyear = as.numeric(as.character(iyear)))|>
+    count(iyear) |>
+    ggplot(aes(x = iyear, y = n)) +
+    geom_line() +
+    labs(title = "Evolución del número de ataques terroristas según continente", x = "Año", y = "Número de Incidentes")
+```
+
+```{r}
+terrorismo |>
+  mutate(iyear = as.numeric(as.character(iyear))) |>
+  group_by(iyear) |>
+  count(continente) |>
+  ggplot(aes(x = iyear, y = n, color = continente)) +
+  geom_line() +
+  labs(title = "Evolución del número de ataques terroristas según continente", x = "Año", y = "Número de Incidentes")
+#Entonces, para tener un gráfico de líneas según el continente no solo debemos contar el año, sino también el continente
+```
+Como se puede apreciar el año 2014 fue el año con mayor cantidad de casos, asi mismo se marca el color rojo perteneciente al continente de África. Por el contrario, Oceania es el continente con menos actos terroristas. 
+
+###Pregunta E) 
+Ahora realice el mismo gráfico pero agrupando las líneas según continente (diferenciado por color). Utilizando gganimate , genere un gif este gráfico realizando una transición por año . (3 puntos)
+
+```{r}
+library(gganimate)
+library(gifski)
+library(png)
+library(av)
+
+p <- terrorismo |>
+  mutate(iyear = as.numeric(as.character(iyear))) |>
+  group_by(iyear) |>
+  count(continente) |>
+  ggplot(aes(x = iyear, y = n, color = continente)) +
+  geom_line() +
+  scale_x_log10() +
+  labs(title = "Evolución del número de ataques terroristas según continente", 
+       x = "Año", y = "Número de Incidentes") +
+  transition_reveal(iyear)
+
+#Para hacer gift primero se instalan gganimate, gifski, png, av
+#luego se define p en función a la tabla realizada anteriormente 
+#Por último, se define la transición, en este caso se hace por años
+view (p)
+```
+###Pregunta F) 
+Además de presentarlo en el HTML, guarde el gif , con apellido_nombre.gif y adjúntelo en su entrega. (2 punto)
+
+```{r}
+
+anim_save("C:/Users/antua/Documents/Rstudio/Vera_Antuane.gif", animation = p)
+```
+##Pregunta 2
+AML.xlsx es una data que brinda distintos indicadores/índices a nivel global. Responda lo siguiente:
+
+###Pregunta A)
+Genere un gráfico de dispersión entre las variables Pobreza  y CPI_Index . 
+
+```{r}
+library(readxl)
+AML <- read_excel("AML.xlsx")
+View(AML)
+```
+
+
+```{r}
+library(ggrepel)
+AML |>
+  ggplot(aes(x = Pobreza, y = CPI_Index, size = PBIPC, label = Pais)) +
+  geom_point() +
+  scale_x_log10() +
+  labs(title = "Gráfico de Dispersión", x = "Pobreza", y = "Índice CPI") +
+  geom_text_repel(max.overlaps = 10)
+```
+
+
+Agregue las siguientes características:
+a.	Que el tamaño del punto esté vinculado con el PBIPC (PBI per cápita) del país.
+b.	Agregue nombre a los ejes X e Y. 
+c.	Etiquete los puntos con el nombre de cada país. Utilice un etiquetado para los puntos de tal forma que se evite la superposición de estas etiquetas. 
+d.	Coloque título al gráfico (Sólo el título, no subtítulo).
+(3 puntos)
+
+
+
+
+###Pregunta B)	
+Para mejorar la visualización del gráfico anterior aplique facetas por continente. ¿Qué relación puede identificar en estas variables, cambia algo de continente en continente? (2 puntos)
+
+```{r}
+AML %>%
+  ggplot() +
+  aes(x = Pobreza) +
+  aes(y = CPI_Index) +
+  geom_point() +
+  aes(color=Continent) +
+  facet_wrap(~Continent)  #<<
+
+```
+
+###Pregunta C)
+Genere un boxplot de la variable AML_Index   según continente (cada continente con un color). En el mismo gráfico, calcule la media del Índice en cada continente (stat_summary) y grafíquelo con un punto rojo en cada boxplot. Interprete. (2 puntos)
+
+```{r}
+summary(AML$AML_Index)
+```
+
+```{r}
+class(AML$AML_Index)
+```
+```{r}
+AML$AML_Index = as.numeric(AML$"AML_Index")
+```
+```{r}
+summary(AML$AML_Index)
+```
+
+
+```{r}
+AML %>%
+  ggplot()+
+  aes(x=Continent)+ aes(y=AML_Index) +
+  aes(color=Continent) +
+  geom_boxplot()+
+  stat_summary(fun ="mean",  #<<
+               colour="red",  #<<
+               size = 5,  #<<
+               geom="point")   #<<
+```
+
+
+

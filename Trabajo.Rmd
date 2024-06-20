@@ -1,0 +1,285 @@
+---
+title: "Trabajo grupal"
+author: "Mayra Gavilan"
+date: "2023-12-09"
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+```{r message=FALSE, warning=FALSE}
+library(readr)
+library(tidyverse)
+library(dplyr)
+library(kableExtra)
+library(ggplot2)
+library(gganimate)
+library(gifski)
+library(png)
+library(gapminder)
+library(av)
+library(magick)
+library(ggrepel)
+library(tidyr)
+library(stringi)
+library(tidyr)
+library(hunspell)
+library(stringdist)
+```
+
+<p align="justify">
+
+El Sistema Informático Nacional de Defunciones (SINADEF), es el aplicativo informático que contiene los datos del  fallecido, genera el certificado de defunción y el informe estadístico; incluye las defunciones fetales,  las defunciones generales y las diagnósticos  y antecedentes de enfermedad  de causas de defunción, los datos son preliminares a la fecha.
+
+</p>
+
+```{r}
+link="https://docs.google.com/spreadsheets/d/1lZXXh6nqooofNOra-OMCJup0rSiyvmi6VD5-zPQK6U0/edit?usp=sharing"
+library(rio)
+Fallecidos<-import(link)
+```
+
+
+```{r}
+Fallecidos
+```
+
+
+```{r message=FALSE, warning=FALSE}
+
+data <- read_delim("fallecidos_sinadef.csv", delim = "|")
+data
+```
+
+```{r}
+colnames(data)
+```
+
+```{r}
+table(data$SEXO)
+table(data$`MUERTE VIOLENTA`)
+table(data$`DEBIDO A (CAUSA A)`)
+table(data$AÑO)
+table(data$EDAD)
+table(data$`PAIS DOMICILIO`)
+table(data$`DEPARTAMENTO DOMICILIO`)
+```
+
+```{r}
+min(data$FECHA)
+max(data$FECHA)
+```
+
+```{r}
+data |> 
+  group_by(FECHA) |> 
+  count() |> 
+  ungroup() |> 
+  top_n(3, n)
+
+data |> 
+  group_by(MES, AÑO) |> 
+  count() |> 
+  ungroup() |> 
+  top_n(3, n)
+```
+
+```{r, fig.align='center'}
+data |> 
+  group_by(AÑO) |> 
+  count() |> 
+  ggplot() +
+  geom_line() +
+  aes(x = AÑO, y = n) +
+  labs(title = "Evolución del número de muertes",
+       x = "Año",
+       y = "Número de muertes (en miles)") +
+  scale_x_continuous(breaks = seq(min(data$AÑO), max(data$AÑO), by = 1)) +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-3)) +
+  geom_vline(xintercept = c(2020, 2022), linetype = "solid", color = "red")
+```
+
+```{r, fig.align='center'}
+data |> 
+  filter(SEXO == "FEMENINO" | SEXO == "MASCULINO") |> 
+  group_by(AÑO, SEXO) |> 
+  count() |> 
+  ggplot() +
+  geom_line() +
+  aes(x = AÑO, y = n, color = SEXO) +
+  labs(title = "Evolución del número de muertes por género",
+       x = "Año",
+       y = "Número de muertes (en miles)") +
+  scale_x_continuous(breaks = seq(min(data$AÑO), max(data$AÑO), by = 1)) +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-3))
+```
+
+```{r}
+data <- data |> 
+  mutate(M_VIOLENTA = 
+          case_when (`MUERTE VIOLENTA`== " " | `MUERTE VIOLENTA`== "NO SE CONOCE" | `MUERTE VIOLENTA`== "SIN REGISTRO" ~ 0,
+                                 TRUE~1))
+
+label(data$M_VIOLENTA)="Muerte Violenta"
+```
+
+```{r, fig.align='center'}
+data |> 
+  group_by(AÑO, M_VIOLENTA) |> 
+  count() |> 
+  ggplot() +
+  geom_line() +
+  aes(x = AÑO, y = n, color=factor(M_VIOLENTA)) +
+  scale_color_manual(values = c("blue", "red"),
+                     labels = c("Muerte no violenta", "Muerte violenta")) +
+  labs(title = "Evolución del número de muertes",
+       x = "Año",
+       y = "Número de muertes (en miles)") +
+  scale_x_continuous(breaks = seq(min(data$AÑO), max(data$AÑO), by = 1)) +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-3))
+```
+
+```{r, fig.align='center'}
+data |> 
+  select(AÑO,`MUERTE VIOLENTA`, M_VIOLENTA, SEXO) |> 
+  filter(M_VIOLENTA==1, `MUERTE VIOLENTA` !="NA", SEXO %in% c("FEMENINO", "MASCULINO")) |> 
+  group_by(AÑO, `MUERTE VIOLENTA`, SEXO) |> 
+  summarise (total_muertes = n(), .groups = 'drop') |> 
+  ggplot() +
+  geom_bar(stat = "identity") +
+  aes(x = AÑO, y = total_muertes, fill = `MUERTE VIOLENTA`) +
+  labs(title = "Total de muertes violentas por género y categoria",
+       x = "Año",
+       y = "Número de muertes") +
+  scale_x_continuous(breaks = seq(min(data$AÑO), max(data$AÑO), by = 1)) + 
+  facet_wrap(~SEXO) 
+```
+
+```{r, fig.align='center'}
+data |> 
+  select(AÑO, EDAD) |>
+  ggplot() +
+  aes(x = as.factor(AÑO)) +
+  aes(y = EDAD) +
+  geom_boxplot() +
+  labs(title = "Gráfico de caja",
+       x = "Año",
+       y = "Edad") +
+  stat_summary(fun ="mean",
+               colour="blue",
+               size = 3, 
+               geom="point")
+```
+
+```{r}
+data |> 
+  filter(SEXO %in% c("FEMENINO", "MASCULINO")) |> 
+  ggplot()+
+  aes(x = EDAD) +
+  geom_histogram() +
+  facet_wrap(~SEXO)
+```
+
+```{r}
+data_corregida <- data_corregida |> 
+              mutate(Etapa_vida=  
+                       case_when(EDAD<12~"Niños",
+                                 EDAD<30~"Jovenes",  
+                                 EDAD<60~"Adultos",
+                                 TRUE~"Adultos mayores"))
+
+data_corregida |> 
+  filter(!is.na(CAUSA) & !(CAUSA %in% c("INSUFICIENCIA RESPIRATORIA","INSUFICIENCIA RESPIRATORIA AGUDA"))) |> 
+  select(Etapa_vida, CAUSA) |> 
+  group_by(Etapa_vida, CAUSA) |> 
+  count() |> 
+  ungroup() |> 
+  group_by(Etapa_vida) |> 
+  top_n(3,n)
+```
+
+```{r}
+data2 <- 
+  data |> 
+  select(`DEBIDO A (CAUSA A)`, `CAUSA A (CIE-X)`) |> 
+  unique()
+
+unicos_data2 <-
+  data2 |> 
+  arrange(`CAUSA A (CIE-X)`) |> 
+  group_by(`CAUSA A (CIE-X)`) |> 
+  slice(1)
+
+tabla_unicos <-
+  unicos_data2 |>
+  mutate( CAUSA = str_replace_all(`DEBIDO A (CAUSA A)`, "[,\\.]", ""),
+          CAUSA = str_remove_all(CAUSA, "(?<![0-9])\\d$"),
+          CAUSA = str_replace_all(CAUSA, "AGUD(O|A)|SEVER(O|A)|MASIV(O|A)|TIPO|RECIENTE|AGUYD(O|A)|LEVE|ENFER(M|N)EDAD POR\\s|ENFERMEDAD DE\\s|INFECCION POR\\s", ""),
+          CAUSA = str_replace_all(CAUSA, "\\bRESULTANTE\\s+EN\\b.*",""),
+          CAUSA = str_replace_all(CAUSA, "\\sDEL\\s", " DE "),
+          CAUSA = str_replace_all(CAUSA, "\\sE\\s(?!H|I)", " DE "),
+          CAUSA = str_replace_all(CAUSA, "\\bINFARTO\\s*(AL\\s*)?MIOCARDIO\\b", "INFARTO DE MIOCARDIO"),
+          #CAUSA = str_replace_all(CAUSA,"[VHI]","VIH"),
+          CAUSA = str_replace_all(CAUSA, "\\bI(?:\\s+|$)", "1 "),
+          CAUSA = str_replace_all(CAUSA, "\\bII(?:\\s+|$)", "2 "),
+          CAUSA = str_replace_all(CAUSA, "\\bIII(?:\\s+|$)", "3 "),
+          CAUSA = str_replace_all(CAUSA, "\\bVIII(?:\\s+|$)", " 8 "),
+          CAUSA = str_replace_all(CAUSA, "([AEIOUY])\\1+", "\\1"),
+          CAUSA = str_trim(CAUSA),  
+          CAUSA = str_squish(CAUSA),
+          CAUSA = stri_trans_general(CAUSA, "Latin-ASCII")) |>
+  group_by(CAUSA) |> 
+  arrange(CAUSA) |> 
+  mutate(n = row_number(),
+         COD_CAUSA = ifelse(n == 1, `CAUSA A (CIE-X)`,NA_character_)) |> 
+  fill(COD_CAUSA, .direction = "down") |> 
+  ungroup()
+
+codigos_n <-
+  tabla_unicos |> 
+  select(`CAUSA A (CIE-X)`,COD_CAUSA) |> 
+  distinct()
+
+causa_n <- 
+  tabla_unicos |> 
+  select(`DEBIDO A (CAUSA A)`, CAUSA) |> 
+  distinct()
+  
+```
+
+```{r}
+data_corregida <- 
+  data |> 
+  left_join(codigos_n, by = NULL) |> 
+  left_join(causa_n, by = NULL)
+
+top_10 <- 
+  data_corregida |> 
+  select(CAUSA) |> 
+  filter(!is.na(CAUSA)) |> 
+  group_by(CAUSA) |> 
+  count() |> 
+  arrange(desc(n)) |>
+  ungroup() |> 
+  top_n(10, n)
+```
+
+```{r, fig.align='center'}
+data_corregida |> 
+  select(AÑO, CAUSA) |> 
+  semi_join(top_10, by = "CAUSA")|> 
+  group_by(AÑO, CAUSA) |> 
+  count() |> 
+  ggplot() +
+  aes(x = AÑO, y = n, color= CAUSA) +
+  geom_point() +
+  labs(title = "Evolución del Top 10 causas de muerte",
+       x = "Año",
+       y = "Total de muertes") +
+  scale_x_continuous(breaks = seq(min(data$AÑO), max(data$AÑO), by = 1)) +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-3))+
+  transition_reveal(AÑO) 
+```
+

@@ -1,0 +1,819 @@
+---
+title: "Reporte de fallecimientos Perú 2017-2023"
+author: ""
+date: "2023-12-16"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# 1. Introducción
+
+<p align="justify">
+El presente reporte tiene como objetivo identificar las causas preponderantes de fallecimiento durante los últimos siete (07) años en el contexto peruano, según lo registrado en el Sistema Informático Nacional de Defunciones (SINADEF). El SINADEF permite el registro de datos del fallecido y la generación del certificado de defunción, desempeñando un papel crucial en la recopilación y gestión de información vital para la salud pública en el Perú.
+</p>
+<p align="justify">
+El propósito central de este estudio es obtener información precisa y contextualizada que facilite la formulación e implementación de programas de salud específicos, orientados a abordar las causas fundamentales de la mortalidad en el ámbito peruano. El análisis de los datos provenientes del SINADEF no solo contribuirá a comprender las tendencias de mortalidad, sino que también proporcionará insights cruciales para el diseño de estrategias de salud pública adaptadas a las necesidades y desafíos particulares de la población peruana.
+</p>
+
+# 2. Descripción general de base de datos
+
+<p align="justify">
+En esta sección revisaremos brevemente la base de datos del SINADEF con la finalidad de identificar las variables más relevantes para este reporte y determinar si existe la necesidad de realizar algún ajuste previo al inicio del análisis.Iniciaremos llamando a los paquetes que necesitaremos.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+library(readr)
+library(tidyverse)
+library(dplyr)
+library(kableExtra)
+library(gtsummary)
+library(Hmisc)
+```
+
+```{r message=FALSE, warning=FALSE}
+data <- read_delim("TB_SINADEF.csv", delim = ",")
+glimpse(data)
+data |> 
+  select(`DEBIDO A (CAUSA A)`) |> 
+  head(25) |> 
+  kbl()
+```
+
+# 3. Procesamiento
+
+<p align="justify">
+Esta sección describirá el trabajo realizado para la limpieza de las variables *causa de fallecimiento* y *departamento*, las cuales han sido identificadas en la sección anterior y requieren de procesamiento previo a su análisis. A continuación se presentan los paquetes de R utilizados, una breve descripción de la problemática identificada y los códigos.
+</p>
+<p align="justify">
+Los principales paquetes utilizados fueron los siguientes:\
+1. Stringr.- paquete que proporciona funciones para manipulaciones de cadenas de texto.\
+2. Stringi.- paquete que proporciona funciones para transformaciones generales de candenas de texto.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+library(stringr)
+library(stringi)
+```
+
+## 3.1. Limpieza de datos relativos a la causa de muerte
+
+<p align="justify">
+La base de datos del SINADEF presentan seis (06) campos de causa de muerte y sus correspondientes códigos, siendo los primeros las columnas "DEBIDO CAUSA A" y "CAUSA A (CIE-X)". De acuerdo con la Guía Técnica para el correcto llenado del certificado de defunción, este campo corresponde a las enfermedades, estados morbosos o lesiones que causan de manera directa el fallecimiento. En consecuencia, para el presente reporte, se considerá como causa de muerte los registros de los campo en mención.\
+</p>
+<p align="justify">
+A partir de la revisión de los valores únicos de ambas columnas, se observó que la base de datos presentaba más de una enfermedad para un mismo código y más de un código para una misma enfermedad. Como consecuencia se optó por trabajar en la limpieza solo del campo "DEBIDO CAUSA A", para ello se hizo uso, principalmente, de la función *str_replace_all* y de expresiones regulares.\
+</p>
+<p align="justify">
+Como se puede observar en el código líneas abajo, el primer paso fue realizar una limpieza general al listado de causas de muerte con el objetivo de obtener cadenas de texto de solo dos (02) palabras, para ello realizamos los siguientes cambios:\
+1. eliminación de toda cadena que tuviera el mismo caracter de inicio a fin;\
+2. eliminación de la cadena "PACIENTE CON" siempre que con ella iniciará el texto;\
+3. eliminación de todos los caracteres que venían después de una coma o de las palabras "CON" o "SIN", esto debido a que se observo que todo texto posterior correspondía a una ampliación de la enfermedad; \
+4. eliminación de todos los signos de puntuación; \
+5. eliminación de los espacios en blanco entre letras únicas, esto con el objetivo de corregir casos como "A C V" o "T B C" que corresponden a enfermedades pero que al estar mal escritas no eran reconocidas dentro de sus pares;\
+6. eliminación de todos los dígitos, esto debido a que buscamos quedarnos con la enfermedad general y no con la especificación del tipo (1, 2, etc.);\
+7. eliminación de las letras que se encontraban solas;\
+8. eliminación de una de las repeticiones de vocales iguales;\
+9. eliminación de una de las repeticiones de caracteres iguales; y\
+10. eliminación de tildes.\
+</p>
+<p align="justify">
+En segundo lugar, realizamos cambios para poder eliminar artículos y preposiciones que nos permitan quedarnos con la cadena de dos palabras sin que una de estas no corresponda a la enfermedad. Asimismo, se eliminaron adjetivos y cadenas de texto que no aportaban información adicional, y se extrajeron enfermedades como COVID, VIH y TBC que se encontraban dentro de las cadenas de texto, pero no siempre al inicio.\
+</p>
+<p align="justify">
+En tercer lugar, se creó el registro de "INDETERMINADO" para recoger todas las cadenas de texto donde se indicaban que no se había podido determinar la causa de fallecimiento, para ello se usaron expresiones regulares para identificar palabras clave como *putrefacción*, *cadaver*, *descomposición*, entre otras; y se realizaron tres (03) correcciones ortográficas para causas de fallecimiento muy comunes.\
+</p>
+<p align="justify">
+Finalmente, obtenemos una cadena de texto de 2 palabras y con las funciones *str_trim* y *str_squish* eliminamos todos los espacios en blanco que puedan estar al inicio o al final de la cadena y aquellos espacios adicionales entre palabras.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+d1 <-
+  data |> 
+  select(`DEBIDO A (CAUSA A)`)|> 
+  unique() |> 
+  mutate( 
+    CAUSA = stri_trans_toupper(`DEBIDO A (CAUSA A)`),
+    CAUSA = str_replace_all(CAUSA, "^PACIENTE CON\\s", ""),
+    CAUSA = str_replace_all(CAUSA, "^(CON|SIN)\\s", ""),
+    CAUSA = str_replace_all(CAUSA, "(?<=,).*", ""),
+    CAUSA = str_replace_all(CAUSA, "(CON\\s).*", ""),
+    CAUSA = str_replace_all(CAUSA, "(\\sNO\\s).*", ""),
+    CAUSA = str_replace_all(CAUSA, "[:punct:]", ""),
+    CAUSA = str_replace_all(CAUSA, "[´`|]", ""),
+    CAUSA = str_replace_all(CAUSA, "\\b([A-Z]\\s)+[A-Z]\\b", function(match) str_replace_all(match,"\\s", "")),
+    CAUSA = str_replace_all(CAUSA, "\\b[\\d]+", ""),
+    CAUSA = str_replace_all(CAUSA, "\\b([A-Z]\\s*){1}\\b", ""),
+    CAUSA = str_replace_all(CAUSA, "\\b([A-Z]\\d+)\\b", ""),
+    CAUSA = str_replace_all(CAUSA, "([AEIOUY])\\1{1,}", "\\1"),
+    CAUSA = str_replace_all(CAUSA, "([^AEIOUY])\\1{2,}", "\\1\\1"),
+    CAUSA = str_replace_all(CAUSA, "\\d", ""),
+    CAUSA = str_replace_all(CAUSA, "^(.)\\1*$", ""),
+    CAUSA = stri_trans_general(CAUSA, "Latin-ASCII")) |> 
+  mutate(
+    CAUSA = str_replace_all(CAUSA, "\\b(D(E|EL)|EN|(A|E)L|LA|QUE)\\b", ""),
+    CAUSA = str_replace_all(CAUSA, ".*MUERTE POR\\s*", ""),
+    CAUSA = str_replace_all(CAUSA, "(DE\\s|SIN\\s)?INTENCI.*", ""),
+    CAUSA = str_replace_all(CAUSA, "(RESULTANTE\\s)?EN ENFER(.*)|POR DEF(.*)|SEVER(A|O)", ""),
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)(C|V)(O|P)V(\\w*)\\b.*|.*\\b(\\w*)CORO(RN|N).*?(\\w*)\\b.*", "COVID"),
+    CAUSA = str_replace_all(CAUSA,".*\\bVIH\\b.*","VIH"),
+    CAUSA = str_replace_all(CAUSA,".*\\bVHI\\b.*","VIH"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(SIDA|INMUNO)(\\w*)\\b.*","VIH"),
+    CAUSA = str_replace_all(CAUSA,".*\\bTBC(\\w*)\\b.*","TBC"),
+    
+    # CAUSA DE MUERTE NO DETERMINADA
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)(INGRESA|LLEG(O|A))\\sCADAVER(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)CADAVER(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)PUTR(E|F).*?ON(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)DESCOM.*?ON(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)IMPRECISABLE(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)(CAUSA\\s)?(A\\sDE|INDE|DE)TERMINA(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)EN\\ESPERA(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(CAUSA|MUER.*?CAUSA|OTR.*?CAUSA).*?(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)DESC.*?CAUSA(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,".*\\b(\\w*)NO.*?CAUSA(\\w*)\\b.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,"^MUERTE\\s*\\w*\\s*AS.*", "INDETERMINADO"),
+    CAUSA = str_replace_all(CAUSA,"^MUERTE\\s*OCURRE.*", "INDETERMINADO"),
+    
+    # CORRECCION DE ORTOGRAFIA
+    CAUSA = str_replace_all(CAUSA,"A(B|C)(CC|C|S)(E|C)(S|E|C)(SO|O|OS|SOS|ESO).*?", "ABSCESO"),
+    CAUSA = str_replace_all(CAUSA,"\\bA(C|C)(\\w+)N(J)?T(Y)?[AEIOU]?\\b", "ACCIDENTE"),
+    CAUSA = str_replace_all(CAUSA,"\\bABDONEN\\b", "ABDOMEN"),
+    
+    # QUEDARNOS SOLO CON LAS DOS PRIMERAS PALABRAS
+    CAUSA = str_replace_all(CAUSA, "\\b(\\w+\\s+\\w+).*", "\\1"),
+    CAUSA = str_replace_all(CAUSA, "\\bNO|POR\\b", ""),
+    
+    CAUSA = str_trim(CAUSA),
+    CAUSA = str_squish(CAUSA),
+    CAUSA = ifelse(CAUSA=="","INDETERMINADO", CAUSA)) |> 
+  arrange(CAUSA)
+
+d1
+```
+
+<p align="justify">
+Luego de realizar las modificaciones antes señaladas, procedimos a realizar una corrección más especifica. Para ello, haciendo uso de expresiones regulares modificamos la causa de fallecimiento para obtener una sola cadena de texto para una enfermedad general. Así, por ejemplo, para todos los tipos de cáncer, obtuvimos como causa final solo "CANCER" y para casos donde observamos diferencias en la escritura de una misma enfermedad como insuficiencia respiratoria, obtuvimos una sola cadena. Con ello logramos limpiar más del 80% del total de campos únicos con los que inicialmente contabamos.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+d2 <-
+  d1 |> 
+  select(CAUSA) |> 
+  unique() |> 
+  mutate(
+    CAUSA1 = CAUSA,
+  # ACCIDENTE VASCULAR
+    CAUSA1 = str_replace_all(CAUSA1,"\\b(\\w*)A(VC|CV)\\b.*","ACCIDENTE VASCULAR"),
+    CAUSA1 = str_replace_all(CAUSA1,"\\bA(CC|C)(I|\\s).*?(V|B|C)(A|S)(S|R|C)(\\w*)\\b.*", "ACCIDENTE VASCULAR"),
+    CAUSA1 = str_replace_all(CAUSA1,"\\bACCIDENTE CV\\b.*", "ACCIDENTE VASCULAR"),
+    CAUSA1 = str_replace_all(CAUSA1,"\\bACC(ID|\\s).*\\s(ENCEFAL.*|CE.*|CRE\\w*BRO)\\b.*", "ACCIDENTE VASCULAR"),
+  # CANCER
+    CAUSA1 = str_replace_all(CAUSA1,".*\\b(\\w*)(V|C)ANCER(\\w*)\\b.*|\\bCA\\s(\\w*)\\b.*", "CANCER"),
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bCA(N|R)(C|D|F|S|V|C)(N|R|W|E|A|C|D|F)(\\w*)\\b.*", "CANCER"),
+  # INSUFICIENCIA RESPIRATORIA
+    CAUSA1 = str_replace_all(CAUSA1, ".*\\bINSUFI.*?RES(\\w*)\\b.*", "INSUFICIENCIA RESPIRATORIA"),
+  # ENVENENAMIENTO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\b(AUTOE|IE|E)NVEN(\\w*)\\b.*", "ENVENENAMIENTO"),
+  # AHOGAMIENTO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bAHOGA(\\w*)\\b.*", "AHOGAMIENTO"),
+  # ASFIXIA
+    CAUSA1 = str_replace_all(CAUSA1,"ASFIXIA(\\w*)\\b.*", "ASFIXIA"),
+  # ACIDOSIS
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bA(C|S)(ED|ID|I)O(C|S|IS)(\\w*)\\b.*","ACIDOSIS"),
+  # INFARTO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bINFARTO(\\w*)\\b.*","INFARTO"),
+  # TRAUMA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bTRAUMA(\\w*)\\b.*","TRAUMA"),
+  # ADENOCARCINOMA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bADEN.*?CAR.*?OMA(\\w*)\\b.*","ADENOCARCINOMA"),
+  # CARCINOMA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bCARCINOMA(\\w*)\\b.*","CARCINOMA"),
+  # ABORTO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\b(\\w*)ABORTO(\\w*)\\b.*", "ABORTO"),
+  # SEPSIS
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bSEPSIS(\\w*)\\b.*", "SEPSIS"),
+  # VIOLENCIA SEXUAL
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bSEXUAL(\\w*)\\b.*|.*\\b(\\w*)VIOLA.*?(\\w*)\\b.*|.*\\b(\\w*)ULTRAJ.*?(\\w*)\\b.*", "VIOLENCIA SEXUAL"),
+  # ASFIXIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bAS(F)?.*?(IA|A)\\b.*","ASFIXIA"),
+  # AHORCAMIENTO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bAHORCA(\\w*)\\b.*", "AHORCAMIENTO"),
+  # DISPARO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bDISPARO(\\w*)\\b.*", "DISPARO"),
+  # EMPUJON
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bEMPUJON(\\w*)\\b.*", "EMPUJON"),
+  # ALCOHOLISMO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bALCOHOL(\\w*)\\b.*", "ALCOHOLISMO"),
+  # INFECCION
+    CAUSA1 = str_replace_all(CAUSA1,"^INFECC(\\w*)\\b.*", "INFECCION"),
+  # AMPUTACION
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bAMPUTACION(\\w*)\\b.*", "AMPUTACION"),
+  # ANEMIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bANE(M|X)I(\\w*)\\b.*", "ANEMIA"),
+  # ANEURISMA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bAN(EU|E)RI(S?)M(O|A)(\\w*)\\b.*", "ANEURISMA"),
+  # ANOXIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bANOXIA(\\w*)\\b.*", "ANOXIA"),
+  # APENDICITIS
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bAPENDICITIS(\\w*)\\b.*", "APENDICITIS"),
+  # ARRITMIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bARRITMIA(\\w*)\\b.*", "ARRITMIA"),
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bARR(I|T|P)(T|M|R|U|I)(\\w*)(I|A)\\b.*", "ARRITMIA"),
+  # ARTRITIS
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bARTRITIS(\\w*)\\b.*", "ARTRITIS"),
+  # ARTROSIS
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bARTROSIS(\\w*)\\b.*", "ARTROSIS"),
+  # BRADICARDIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bBRADICARDIA(\\w*)\\b.*", "BRADICARDIA"),
+  # BRONCONEUMONIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bBRONCON(\\w*)\\b.*", "BRONCONEUMONIA"),
+  # NEUMONIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\b(\\w*)NEUMONIA(\\w*)\\b.*", "NEUMONIA"),
+  # ASMA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bASMA(\\w*)\\b.*", "ASMA"),
+  # ATRAGANTAMIENTO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bATRAGANT.*?(\\w*)\\b.*", "ATRAGANTAMIENTO"),
+  # BRONQUIECTASIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bBRONQUIE(C|X|S)TA.*?(\\w*)\\b.*", "BRONQUIECTASIA"),
+  # VOLVULO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bVOLVULO(\\w*)\\b.*", "VOLVULO"),
+  # VICTIMA DE RAYO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bVICT.*?A(Y|R)O(\\w*)\\b.*", "VICTIMA DE RAYO"),
+  # VARICES
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bVARICE(S)(\\w*)\\b.*", "VARICES"),
+  # HERIDA PERFORANTE
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bHERI.*?PE(NE|RFO)(\\w*)\\b.*", "HERIDA PERFORANTE"),
+  # TUMOR
+    CAUSA1 = str_replace_all(CAUSA1,"\\b(TU|UT)Y?R?(M|N)O?(R|S)?.*?\\b.*", "TUMOR"),
+  # ULCERAS
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bULCER.*?(\\w*)\\b.*", "ULCERAS"),
+  # TUBERCULOSIS
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bT(O|U).*?CUL.*?(\\w*)\\b.*|.*\\bTBC(\\w*)\\b.*|.*\\bU(P|B)ER.*?(\\w*)\\b.*", "TUBERCULOSIS"),
+  # TROMBOSIS
+    CAUSA1 = str_replace_all(CAUSA1,".*\\TROMBOSIS(\\w*)\\b.*|.*\\b(\\w*)TBC(\\w*)\\b.*", "TROMBOSIS"),
+  # MELANOMA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bMELANOMA(\\w*)\\b.*", "MELANOMA"),
+  # DERRAME
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bDERRAME(\\w*)\\b.*", "DERRAME"),
+  # SHOCK
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bSH(O?)CK(\\w*)\\b.*", "SHOCK"),
+  # HEMORRAGIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bHEMO(RR|R)AGIA(\\w*)\\b.*", "HEMORRAGIA"),
+  # EDEMA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bEDEMA(\\w*)\\b.*", "EDEMA"),
+  # GASTRITIS
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bGASTRITIS(\\w*)\\b.*", "GASTRITIS"),
+  # ASPIRACION
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bASPIRACION(\\w*)\\b.*", "ASPIRACION"),
+  # ACCIDENTE DE TRANSITO
+    CAUSA1 = str_replace_all(CAUSA1, "\\bA(CC|C).*?TRA.*?I(T|C)O\\b.*","ACCIDENTE DE TRANSITO"),
+    CAUSA1 = str_replace_all(CAUSA1, "\\bSUC.*?TRA.*?I(T|C)O\\b.*","ACCIDENTE DE TRANSITO"),
+    CAUSA1 = str_replace_all(CAUSA1, "\\bA(CC|C).*?TRANS(\\w*)\\b.*","ACCIDENTE DE TRANSITO"),
+    CAUSA1 = str_replace_all(CAUSA1, "\\bA(CC|C).*?MOTO(\\w*)\\b.*","ACCIDENTE DE TRANSITO"),
+    CAUSA1 = str_replace_all(CAUSA1, "\\bA(CC|C).*?VEHICU(\\w*)\\b.*","ACCIDENTE DE TRANSITO"),
+    CAUSA1 = str_replace_all(CAUSA1, "\\bATROP(\\w*)\\b.*","ACCIDENTE DE TRANSITO"),
+  # PARO
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bPARO\\b.*","PARO"),
+  # SINDROME DIFICULTAD RESPIRATORIA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bSIND(ROME|OME)\\s(\\w*)FICUL(\\w*)\\b.*","SINDROME DIFICULTAD RESPIRATORIA"),
+  # SINDROME DE MUERTE SUBITA
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bSINDROME MUERTE","SINDROME DE MUERTE SUBITA"),
+    CAUSA1 = str_replace_all(CAUSA1,".*\\bMUERTE\\s\\S(SU|U)B.*?","SINDROME DE MUERTE SUBITA"))
+```
+
+Finalmente, creamos el objeto "data2" con la causa de muerte corregida, llamada "n_CAUSA".
+
+```{r message=FALSE, warning=FALSE}
+corr_causas <-
+  d1 |> 
+  left_join(d2, by = NULL)
+
+data2 <-
+  data |>
+  left_join(corr_causas, by = NULL) |> 
+  rename(n_CAUSA=CAUSA1)
+```
+
+A continuación, observamos la corrección realizada en los primeros 25 casos de la data.
+
+```{r}
+data2 |> 
+  select(`DEBIDO A (CAUSA A)`,n_CAUSA) |> 
+  head(25) |> 
+  kbl()
+```
+
+## 3.2. Corrección de datos relativos al departamento de domicilio del fallecido
+
+<p align="justify">
+Producto de la correción de la variable "DEPARTAMENTO DOMICILIO", se generaron dos variables nuevas denominadas "ubigeo_reniec" y "departamento. Asimismo, se utilizará la información de cógidos de ubigeo de la RENIEC. El procedimiento en detalle se explica en la presente sección.
+</p>
+<p align="justify">
+A partir de la exploración de la información sobre el domicilio de las personas fallecidas se puede encontrar que existen diferentes variables relacionadas que se dividen en categorías como País, Departamento, Provincia y Distrito.
+</p>
+<p align="justify">
+A continuación, se va a mostrar la tabla de frecuencias de la variable "PAIS DOMICILIO". Se ve que en la data hay 946 casos de países con valor *SIN REGISTRO* y y 163 casos *NA*. Además, se observa que Perú concentra cai el 100% de las observaciones:
+</p>
+
+```{r}
+#data2 |> 
+#  select(`PAIS DOMICILIO`) |> 
+#  tbl_summary() 
+```
+
+<p align="justify">
+Sin embargo, se observa que se pierde mucha información si solo se utiliza la información a nivel países dado que casi la totalidad de observaciones muestra como domicilio el Perú (99.7% de las observaciones), por ello, se utilizará la variable Departamento como información del domicilio de las personas fallecidas.
+</p>
+<p align="justify">
+Respecto a la información por Departamento, observamos que existen 76 casos en los que no se ha definido el Departamento (*NO DEFINIDO*), 975 casos que figuran como *SIN REGISTRO* y 10,265 casos como *NA*, estos últimos agrupan la mayor cantidad de observaciones dentro de la variable.
+</p>
+
+```{r}
+#data2 |> 
+# select(`DEPARTAMENTO DOMICILIO`) |> 
+#  tbl_summary()
+```
+
+<p align="justify">
+Por lo descrito anteriormente, se procederá a realizar el procesamiento de la variable Departamento, específicamente el tratamiento de los casos *NA*, *SIN REGISTRO* y *NO DEFINIDO*. Dichas transformaciones se realizarán mediante el uso de la función mutate()  y case when(). Por ello, a continuación se procederá a explicar los casos descritos dentro de case when:\
+</p>
+**NO DEFINIDO**
+<p align="justify">
+Para los casos en que el Departamento tiene el valor *NO DEFINIDO*, se observa que sus valores asociados en la variable País corresponden a países extranjeros. Asimismo, considerando que la información de fallecidos con domicilio en países extranjeros se divide entre muchos países y no representa más del 1% de observaciones, se convertirá la información al valor "Extranjero".\
+</p>
+**CIUDADES EXTRANJERAS**
+<p align="justify">
+Asimismo, de la exporación de la base de datos se observa que sí se ha registrado la ciudad de domicilio para muchos países extrnajeros. Tal es el caso de Amazonas que también es un departamento de Colombia como se puede ver a continuación:
+</p>
+
+```{r}
+data2 |> 
+  filter(!is.na(`PAIS DOMICILIO`),`PAIS DOMICILIO` != "PERU" & `PAIS DOMICILIO` != "SIN REGISTRO") |> 
+  group_by(`DEPARTAMENTO DOMICILIO`) |> 
+  count()
+```
+<p align="justify">
+Por lo tanto, dichas filas con ciudades del extranjero también se van a convertir en el valor "Extranjero" para fines de nuestro análisis. Para ello tomamos las filas que tienen nombres diferentes a "PERU" y diferentes al valor "SIN REGISTRO".\
+</p>
+**NA**
+<p align="justify">
+A continuación, se va a explorar la información relacionada a los NA en la variable Departamento. Para ello, vamos a filtrar las filas y agrupar por Provincia. Se observa que 10102 casos pertenecen a la Provincia "CALLAO" y 163 son "NA".
+</p>
+
+```{r}
+    data2 |> 
+    filter(is.na(`DEPARTAMENTO DOMICILIO`)) |> 
+    group_by(`PROVINCIA DOMICILIO`) |> 
+    count()
+```
+<p align="justify">
+Respecto a los 163 NA, se observa también tienen valor NA para las variables Departamento, País y no tinene ningún código de ubigeo asociado. Dado que no se puede extraer información al respecto, quedarán en esos términos, es decir, las dejamos como NA.
+</p>
+<p align="justify">
+Respecto a los casos en los que la provincia figura "CALLAO" vamos a utilizar el código de ubigeo para confirmar dicha información.
+</p>
+**CÓDIGO DE UBIGEO**
+<p align="justify">
+El Código de Ubigeo hace referencia al Código de Ubicación Geográfica, que utilizan instituciones nacionales com la RENIEC para codificar las circunscripciones territoriales del Perú. De esta forma, está compuesto por 6 dígitos. Los primeros 2 dígitos hacen referencia al Departamento del Perú, los siguientes 2 (el tercer y cuarto dígito) a la Provinicia, y finalmente, el quinto y sexto dígito al Distrito.
+</p>
+<p align="justify">
+Para completar la información sobre Departamento, en los casos restantes en los que sí se tiene el código de ubigeo, se va a utilizar la codificación de la RENIEC para realizar la transformación desde NA a su Departamento correspondiente.
+</p>
+<p align="justify">
+Cabe mencionar que el código de ubigeo de esta base de datos tiene 13 dígitos (separado entre guiones), lo cual es diferente al código de 6 dígitos proporcionado por la RENIEC. Por consiguiente, se van a realizar las transformaciones necesarias a este código considerando que desde el quinto dígito hasta el décimo corresponden al código de la RENIEC.
+</p>
+<p align="justify">
+En primer lugar, se va a importar la base de datos que se ha extraído de la Plataforma Nacional de Datos Abiertos y la llamaremos "ubigeos". Se observa que nuestra variable de interés "ubigeo_reniec" es un character de 6 dígitos.
+</p>
+```{r message=FALSE}
+ubigeos <- read_delim("TB_UBIGEOS.csv", delim = ",")
+glimpse(ubigeos$ubigeo_reniec)
+```
+<p align="justify">
+Empezamos con la extración de las columnas relevantes para nuestro trabajo. En ese sentido, solo vamos a extraer la información de las columnas ubigeo_reniec y departamento. Asimismo, se va a modificar, mediante el uso de la función mutate(), la columna "ubigeo_reniec" a fin de que contenga solo los dígitos correspondientes a la información del Departamento.\
+
+Finalmente, mediante el uso de distinct () vamos a eliminar los elementos duplicados.
+</p>
+```{r}
+ubigeos <- 
+  ubigeos |> 
+  select(ubigeo_reniec, departamento) |> 
+  mutate (ubigeo_reniec = substr(ubigeo_reniec, 1, 2)) |> 
+  distinct()
+```
+
+<p align="justify">
+En nuestra base de datos de SINADEF, como la columna de Código de ubigeos de nuestra base de datos tiene 13 dígitos y está separada por guiones intermedios, vamos a eliminar dichos guiones y luego extraeremos los dígitos del quinto al décimo.
+</p>
+<p align="justify">
+Al respecto, se utilizó str_replace_all para reemplazar el símbolo del guión "-" por un valor sin espacios "". Además, se utilizamos substr para extraer los dígitos desde el quinto al décimo.Del mismo modo que en el caso de la base de datos "ubigeos", se va agregar una columna denominada "ubigeo_reniec" que va a contener solo los 2 dígitos correspondientes al Departamento.
+</p>
+<p align="justify">
+Por otro lado, se va a realizar la unión de las 2 bases de datos, mediante el uso de los 2 dígitos de Departamento del Código de ubigeo, con el fin de poder completar la información de Departamento. Para ello, se utilizó la función left_join(), y la llave que va a unir ambas bases es "ubigeo_reniec".Cabe mencionar que el ubigeo de nuestra base de datos de SINADEF incluía información de ciudades del extranjero, así que esa información se va a completar en la variable "Departamento", para lo cual se utiliza la función mutate () con case_when().
+</p>
+<p align="justify">
+Finalmente, en este punto en la variable "departamento" presenta 1145 observaciones *NA*. Si se revisan los valores correspondientes con la variable "DEPARTAMENTO DOMICILIO", se puede observar que éstos están conformados por los 163 NA ya comentados, 975 observaciones *SIN REGISTRO* y 5 observaciones que tienen asociados nombres de departamentos del Perú (Ayacucho, Junín, Madre de Dios, Piura y Tacna), pero que no tenían bien registrado el código del ubigeo.
+</p>
+<p align="justify">
+Por lo tanto, vamos a apicar un case_when(), a fin de considerar esos 5 casos de departamentos que no pudieron ser recogidos en la variable "departamento" debido a los errores en el registro del código de ubigeo".
+</p>
+<p align="justify">
+En conclusión , nos vamos a quedar con 163 valores *NA* y 975 valores *SIN REGISTRO*.
+</p>
+<p align="justify">
+A continuación, se presenta el código utilizado el cual ha sido explicado en la presente sección.
+</p>
+
+```{r}
+data2 <-
+  data2 |> 
+    mutate(
+    `DEPARTAMENTO DOMICILIO`  = case_when(
+      `DEPARTAMENTO DOMICILIO` == "NO DEFINIDO" ~ "EXTRANJERO",
+      `PAIS DOMICILIO` != "PERU" & `PAIS DOMICILIO` != "SIN REGISTRO" ~ "EXTRANJERO",
+      TRUE ~ `DEPARTAMENTO DOMICILIO`)) |> 
+    mutate(`COD# UBIGEO DOMICILIO` = str_replace_all(`COD# UBIGEO DOMICILIO`, "-", ""),
+    `COD# UBIGEO DOMICILIO` = substr(`COD# UBIGEO DOMICILIO`, 5, 10)) |> 
+    mutate (ubigeo_reniec = substr(`COD# UBIGEO DOMICILIO`, 1, 2)) |> 
+    
+   # UNIR BASES DE DATOS#
+  left_join(ubigeos, by = "ubigeo_reniec") |> 
+    mutate (departamento = case_when(`DEPARTAMENTO DOMICILIO` == "EXTRANJERO" ~ "EXTRANJERO",
+      TRUE ~ departamento)) |> 
+
+  # CASOS DE 5 DEPRATAMENTOS#
+  mutate(departamento = case_when(
+    is.na(departamento) & `DEPARTAMENTO DOMICILIO` == "AYACUCHO" ~ "AYACUCHO", 
+    is.na(departamento) & `DEPARTAMENTO DOMICILIO` == "JUNIN" ~ "JUNIN",
+    is.na(departamento) & `DEPARTAMENTO DOMICILIO` == "MADRE DE DIOS" ~ "MADRE DE DIOS",
+    is.na(departamento) & `DEPARTAMENTO DOMICILIO` == "PIURA" ~ "PIURA",
+    is.na(departamento) & `DEPARTAMENTO DOMICILIO` == "TACNA" ~ "TACNA",
+    TRUE ~ departamento))
+```
+
+# 4. Análisis descriptivo
+
+```{r message=FALSE, warning=FALSE}
+## Previamente instalados, cargamos los paquetes siguientes:
+library(ggplot2)
+library(gganimate)
+library(gifski)
+library(png)
+library(gapminder)
+library(av)
+library(magick)
+library(ggrepel)
+```
+
+<p align="justify">
+A continuación, revisamos descriptivamente la data ya procesada. Podemos observar que la data cuenta con 1,052,955 casos, y con 35 variables que explican las características de cada caso. Asimismo, la mayoría de las variables son de tipo "character".
+</p>
+
+```{r}
+glimpse(data2) # Utilizamos "glimpse" para obtener un resumen conciso de la estructura de "data2"
+```
+
+
+<p align="justify">
+Luego, identificamos características esenciales de dos variables: SEXO y EDAD. En el caso de la variable EDAD, se aprecia que el promedio de años que tenían las personas que han fallecido se encuentra entre los 67 años (66.83)
+</p>
+
+```{r}
+data2$EDAD |>
+  summary()
+```
+
+<p align="justify">
+En términos de periodo, identificamos la cantidad de muertes por año. En esa línea, en primer lugar se encuentra el año 2021 (año pandemia) con 248370 casos; lo sigue el año 2020 (año pandemia) con 226623; y en tercer lugar el año 2022 (año pandemia) con 159302, según SINADEF.
+</p>
+
+```{r}
+data2 |>
+  count(AÑO) |>
+  arrange(desc(n))
+```
+
+<p align="justify">
+Si nos enfocamos en el top 3 de años, vemos que es el periodo de la pandemia por COVID-19; sin embargo el SINADEF indica que hubo pocos casos registrados como COVID, siendo Lima el primero con solo 8320.
+</p>
+
+```{r}
+data2 |>
+  group_by(`DEPARTAMENTO DOMICILIO`) |> 
+  count(n_CAUSA) |> 
+  filter(n_CAUSA == "COVID") |> 
+  arrange(desc(n))
+
+```
+
+<p align="justify">
+Profundizando en el tema, revisamos las muertes registradas en el SINADEF por causa, mostrando resultados más significativos. Observamos que las muertes por insuficiencia respiratoria, infarto y shock son las más comunes durante el periodo elegido.
+</p>
+
+```{r}
+data2 |>
+  group_by(n_CAUSA) |> 
+  count(n_CAUSA) |> 
+  arrange(desc(n))
+```
+
+## 4.1. Top 10 causas de muerte
+
+<p align="justify">
+En el siguiente gráfico, podemos visualizar la evolución del número de muertes respecto al tipo de causa a lo largo de los últimos 7 años. Para ello, definimos previamente el Top 10 de causas de muerte descritas en el registro.
+</p>
+
+```{r}
+top_10 <- 
+  data2 |> 
+  select(n_CAUSA) |> 
+  filter(!is.na(n_CAUSA)) |> 
+  group_by(n_CAUSA) |> 
+  count() |> 
+  arrange(desc(n)) |>
+  ungroup() |> 
+  top_n(10, n)
+```
+
+<p align="justify">
+Fácilmente, se evidencia el pico de muertes alcanzado durante la pandemia de COVID-19, bajo la causa de insuficiencia respiratoria. No sólo ello, sino también completan el top 3 de causas de muerte durante el periodo 2020-2022 el infarto y el paro (cardiaco). Además, surge el término "covid" como causa de muerte.
+</p>
+
+```{r}
+data2 |> 
+  select(AÑO, n_CAUSA) |> 
+  semi_join(top_10, by = "n_CAUSA")|> 
+  group_by(AÑO, n_CAUSA) |> 
+  count() |> 
+  ggplot() +
+  aes(x = AÑO, y = n, color= n_CAUSA) +
+  geom_point() +
+  labs(x = "Año",
+       y = "Total de muertes (miles)",
+       color = "Causa de muerte") +
+  scale_x_continuous(breaks = seq(min(data2$AÑO), max(data2$AÑO), by = 1)) +
+  scale_y_log10(labels = function(x) format(x, scientific = FALSE)) +
+  transition_reveal(AÑO) + 
+  theme_bw() +
+  labs(title = "Evolución del Top 10 causas de muerte",  
+       subtitle = "Año: {round(frame_along)}") +
+  shadow_wake(0.2)
+```
+
+<p align="justify">
+Además, el gráfico disgregado por etapas de vida, refleja que el número de víctimas que podría asociarse a la pandemia de Covid 19, se distribuye principalmente entre adultos y adultos mayores, mientras que los niños no presentan mayor cambio en la distribución de fallecidos por el top 10 de causas de muerte en los ultimos 7 años.  
+</p>
+
+
+```{r}
+data2 |>
+  filter(`TIEMPO EDAD`=="AÑOS") |>
+  mutate(ETAPA_VIDA=case_when(EDAD<12~"Niños",
+                                 EDAD<30~"Jovenes",  
+                                 EDAD<60~"Adultos",
+                                 TRUE~"Adultos mayores")) |> 
+  select(AÑO, ETAPA_VIDA, n_CAUSA) |>
+  semi_join(top_10, by = "n_CAUSA")|> 
+  group_by(AÑO, ETAPA_VIDA, n_CAUSA) |> 
+  ggplot() +
+  aes(x = n_CAUSA) |> 
+  geom_bar() +
+  scale_y_log10(labels = function(x) format(x, scientific = FALSE)) +
+  labs(x = "Top 10 causas de muerte",
+       y = "Total de muertes") +
+  theme_bw() +
+  theme( axis.text.x= element_text(angle=  90, size=8, hjust=1, vjust=0.5)) +
+  facet_wrap(~ETAPA_VIDA) +
+  transition_reveal(AÑO) +
+  labs(title = "Causas de muerte vs Etapa de vida", 
+       subtitle = "Año: {round(frame_along)}")
+```
+
+
+```{r}
+unique(data2$SEXO)
+```
+
+## 4.2. Suicidios
+
+<p align="justify">
+También, exploramos la composición demográfica de las muertes por suicidio registradas. Se evidencia una mayor cantidad de hombres, y una meseta de suicidios masculinos en el periodo 2020-2022 con el máximo histórico. Mientras tanto, el número de suicidios de mujeres difiere en el primer año de pandemia, 2020, donde se visualiza un descenso respecto al año anterior. Entre los años 2021 y 2022 vuelve a aumentar el número de muertes de este tipo.
+</p>
+
+```{r}
+data2  |>
+  select(AÑO, SEXO,`MUERTE VIOLENTA`, `NIVEL DE INSTRUCCIÓN`) |> 
+  filter(`MUERTE VIOLENTA`=="SUICIDIO", SEXO %in% c("F", "M"))  |> 
+  group_by(AÑO, SEXO) |>
+  count() |> 
+  ggplot() +
+  aes(x=AÑO) +
+  aes(y=n) +
+  aes(color=`SEXO`) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Número de suicidios por sexo",
+       x = "Año",
+       y = "Número de muertes",
+       color = "Sexo")
+
+```
+
+<p align="justify">
+De forma más específica, podemos visualizar a continuación el comportamiento del número de suicidios tanto femeninos y masculinos, discriminados por el nivel de instrucción máximo alcanzado.
+</p>
+
+```{r}
+data2  |>
+  select(AÑO, SEXO,`MUERTE VIOLENTA`, `NIVEL DE INSTRUCCIÓN`) |>
+  filter(`MUERTE VIOLENTA`=="SUICIDIO", SEXO %in% c("M"))  |>
+  mutate(INSTRUCCION_MAX=case_when(
+    grepl("primaria", `NIVEL DE INSTRUCCIÓN`, ignore.case = TRUE)~"Primaria",
+    grepl("secundaria", `NIVEL DE INSTRUCCIÓN`, ignore.case = TRUE)~"Secundaria",
+    grepl("superior", `NIVEL DE INSTRUCCIÓN`, ignore.case = TRUE)~"Superior",
+    grepl("ignorado", `NIVEL DE INSTRUCCIÓN`, ignore.case = TRUE)~"No conocido",
+    TRUE~"Ningun nivel"))|> 
+  group_by(AÑO, INSTRUCCION_MAX) |>
+  count() |> 
+  ggplot() +
+  aes(x=AÑO) +
+  aes(y=n) +
+  aes(color=INSTRUCCION_MAX) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Suicidios masculinos por nivel de instrucción",
+       x = "Año",
+       y = "Número de muertes",
+       color = "Nivel de instrucción")
+```
+
+
+```{r}
+data2  |>
+  select(AÑO, SEXO,`MUERTE VIOLENTA`, `NIVEL DE INSTRUCCIÓN`) |>
+  filter(`MUERTE VIOLENTA`=="SUICIDIO", SEXO %in% c("F"))  |>
+  mutate(INSTRUCCION_MAX=case_when(
+    grepl("primaria", `NIVEL DE INSTRUCCIÓN`, ignore.case = TRUE)~"Primaria",
+    grepl("secundaria", `NIVEL DE INSTRUCCIÓN`, ignore.case = TRUE)~"Secundaria",
+    grepl("superior", `NIVEL DE INSTRUCCIÓN`, ignore.case = TRUE)~"Superior",
+    grepl("ignorado", `NIVEL DE INSTRUCCIÓN`, ignore.case = TRUE)~"No conocido",
+    TRUE~"Ningun nivel"))|> 
+  group_by(AÑO, INSTRUCCION_MAX) |>
+  count() |> 
+  ggplot() +
+  aes(x=AÑO) +
+  aes(y=n) +
+  aes(color=INSTRUCCION_MAX) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Suicidios femeninos por nivel de instrucción",
+       x = "Año",
+       y = "Número de muertes",
+       color = "Nivel de instrucción")
+```
+
+<p align="justify">
+En ambos, se evidencia que la mayor concentración corresponde a individuos cuyo nivel de instrucción es secundaria (completa o incompleta). En el caso masculino, con un margen considerable de diferencia, el segundo puesto va alternando a lo largo de los últimos 7 años, entre el nivel de instrucción superior o sólo primaria. El nivel de instrucción superior sí corresponde al segundo lugar en el número de suicidios femeninos. Además, es el único nivel de instrucción que presenta un alza de 2021 al 2022.
+</p>
+
+## 4.3. Top 5 Departamento de Origen de fallecidos
+
+<p align="justify">
+El siguiente gráfico nos mostrará la cantidad de muertes a lo largo del 2017 al 2023 dividido por el top 4 de departamentos con mayor casos de muerte. Para profundizar analizaremos este dato filtrado solo por la causa de muerte a lo largo de los años. 
+</p>
+
+
+```{r}
+top_departamento <-
+  data2 |> 
+  select(departamento)|>
+  group_by(departamento)|>
+  count() |> 
+  arrange(desc(n)) |>
+  ungroup() |> 
+  top_n(5, n)
+
+top_departamento
+```
+
+```{r}
+
+colores <- c("#7FFFD4", "#8968CD", "#0000FF", "#FF7256", "#EE1289")
+
+data2 %>%
+  semi_join(top_departamento, by = "departamento") %>%
+  ggplot() +
+  aes(x = AÑO, fill = departamento) +
+  geom_bar() +
+  scale_fill_manual(values = colores) +
+  labs(
+    title = "Casos de muerte por departamento")
+```
+
+```{r}
+data2 %>%
+  filter(n_CAUSA == "INSUFICIENCIA RESPIRATORIA") %>%
+  semi_join(top_departamento, by = "departamento") %>%
+  ggplot() +
+  aes(x = AÑO, fill = departamento) +
+  geom_bar() +
+  scale_fill_manual(values = colores) +
+  labs(
+    title = "Casos de muerte por departamento"
+  )
+```
+<p align="justify">
+A diferencia del gráfico anterior se puede ver que al filtrar solo por el tipo de causa "Insuficiencia respiratoria"  es más marcada la diferencia en los años 2020 y 2021 (años de la pandemia) 
+</p>
+
+### 4.4. Tipo de seguro 
+
+<p align="justify">
+El siguiente grafico nos mostrará la cantidad de muertes a lo largo del 2017 al 2023 en relación a los dos tipos de seguro más frecuentemente registrado. Como se puede ver los seguros más registrados fueron ESSALUD y el SIS.
+</p>
+
+```{r}
+data2 <- data2 %>%
+  rename(SEGURO = `TIPO SEGURO`)
+```
+
+```{r}
+top_seguros <-
+  data2 |> 
+  select(SEGURO)|>
+  group_by(SEGURO)|>
+  count() |> 
+  arrange(desc(n)) |>
+  ungroup() |> 
+  top_n(2, n)
+
+top_seguros
+```
+
+<p align="justify">
+En el siguiente gráfico se puede apreciar que la mayor cantidad de muertes se dio en las personas afiliadas al seguro de salud SIS, en ese sentido no se afirma una correlación. Sin embargo, puede ser más estudiado a profundidad. 
+</p>
+
+```{r}
+data2 %>%
+  semi_join(top_seguros, by = "SEGURO") %>%
+  ggplot() +
+  aes(x = AÑO, fill = SEGURO) +
+  geom_bar() +
+  labs(
+    title = "Seguros en relación a las muerte desde 2017 - 2023")
+```
+
+<p align="justify">
+En el siguiente gráfico se puede apreciar que la mayor cantidad de muertes se dio en las personas afiliadas al seguro de salud SIS. En este gráfico filtramos el tipo de muerte enfocandonos solo en insuficiencia respiratoria
+</p>
+
+```{r}
+data2 %>%
+  filter(n_CAUSA == "INSUFICIENCIA RESPIRATORIA") %>%
+  semi_join(top_seguros, by = "SEGURO") %>%
+  ggplot() +
+  aes(x = AÑO, fill = SEGURO) +
+  geom_bar() +
+  labs(
+    title = "Seguros en relación a las muerte desde 2017 - 2023"
+  )
+```
+<p align="justify">
+En el último gráfico se aprecia que en Piura existe mayor presencia de fallecidos con SIS, mientras que en Lima parece haber mayor cantidad de fallecidos por ESSALUD. Esto nos plantea varias preguntas en relación a la atención recibida y su efectividad.
+</p>
+
+```{r}
+data2 %>%
+  filter(departamento %in% c("LIMA", "LA LIBERTAD", "PIURA", "AREQUIPA")) %>%
+  select(AÑO, departamento, SEGURO) |>
+  semi_join(top_seguros, by = "SEGURO") %>%
+  ggplot() +
+  aes(x = AÑO, fill = SEGURO) +
+  geom_bar()+
+  facet_grid(rows = vars(departamento), scales = "free_y")
+```
+
+# 5. Conclusiones
+
+<p align="justify">
+- La base de datos del SINADEF presenta inconsistencias como consecuencia de un mal llenado de los certificados de defunción, aun cuando existe una Guía Tecnica para su correcto llenado. Esta problemática se traduce en una limitación significativa para los usuarios, ya que obstaculiza la investigación relativa a las causas de fallecimientos en el territorio peruano. Asimismo, a pesar de que se cuenta con diferentes tipos de codificaciones de ubigeos, esta no ha sido especificada en el diccionario de datos, dado que no solo existe la de la RENIEC, sino también está la de la INEI, etc. Es preciso que las bases de datos peruanas especifiquen su codigo de ubigeo a fin de facilitar el análisis de la misma.
+</p>
+
+<p align="justify">
+- En la visualización de datos, se evidencia que el mayor número de muertes se alcanzó durante el estado de emergencia decretado ante la pandemia de covid 19, entre 2020 y 2022. Específicamente, el análisis de muertes por etapa de vida a partir del top 10 causas de muerte en este período, también corrobora la afectación del covid 19 predominante en los adultos y adultos mayores, y de afectación mínima en niños.
+</p>
+
+<p align="justify">
+- Asimismo, cabe resaltar que los datos registrados por SINADEF indican un bajo número de muertes por causa "COVID", lo cual no se relaciona con lo pasado durante el periodo de la pandemia. En esa línea, eL top 3 de causas de muerte durante el periodo de pandemia son insuficiencia respiratoria, infarto y shock. Podría interpretarse que lo registrado en el SINADEF son consecuencias de una persona que tuvo anteriormente COVID.
+</p>
+
+<p align="justify">
+- Respecto al número de suicidios, se concluye la mayor parte de estos corresponde a individuos de sexo masculino. El número de suicidios por nivel de instrucción muestras el mayor número por individuos con secundaria.
+</p>
+
+<p align="justify">
+- El análisis realizado no nos permite encontrar relaciones dependientes, pero nos da la posibilidad de hacer preguntas que permitan ampliar la investigación. En este caso una de las preguntas podría relacionarse a la calidad de la atención recibida por los seguros y si esta ha sido efectiva a lo largo de los últimos años. Es importante también analizar estos datos en relación con los estudios ya realizados, y notas de prensa que se dieron en los años 2020 y 2021. La capacidad estatal en relación con la salud colapso en tiempos de Pandemia. Por eso que la mayor cantidad de fallecidos con seguro público podría estar relacionado con las muertes registradas.
+</p>
+

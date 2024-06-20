@@ -1,0 +1,42 @@
+---
+title: "Clase 02 R"
+author: "Antuané Vera"
+date: "2023-11-19"
+output: html_document
+---
+
+```{r}
+link="https://github.com/ChristianChiroqueR/Diplomado-2021---R-Intermedio/raw/main/Sesi%C3%B3n%202%20-%20Tidyverse/regex.xlsx"
+library(rio)
+regex<-import(link)
+```
+
+```{r}
+library(tidyverse)
+regex$Texto|>str_view("a")
+```
+
+```{r}
+regex$Texto |> str_view("\\d")
+```
+```{r}
+regex$Texto |> str_detect("\\d")
+```
+
+```{r}
+regex$Texto |> str_subset("\\d")
+```
+
+```{r}
+regex$Texto |> str_view("\\(")
+```
+
+```{r}
+regex$Texto |> str_view("@")
+regex$Texto |> str_view("\"")
+```
+```{r}
+regex |>
+  filter(str_detect(Texto,"\\s@"))
+```
+

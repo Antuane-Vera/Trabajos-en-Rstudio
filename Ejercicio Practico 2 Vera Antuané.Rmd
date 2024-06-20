@@ -1,0 +1,75 @@
+---
+title: "Ejercicio Práctico 2"
+author: "Antuané Vera"
+date: "2023-12-14"
+output: html_document
+---
+#Ejercicio Práctico 2
+
+
+##Pregunta 1
+
+La base de datos del Global Terrorism Database (GTD) es una de las bases de datos más extensas y completas sobre actos de terrorismo a nivel mundial. Incluye información sobre incidentes terroristas que han ocurrido a nivel mundial desde 1970 hasta 2018. Esta base de datos incorpora más de 180,000 casos, proporcionando detalles sobre la fecha y ubicación del ataque, el tipo de ataque, el objetivo, y otras variables relacionadas.
+
+Utilizando el archivo actos_terroristas_2.csv responda lo siguiente:
+
+###Pregunta A)
+Importe la base de datos, asegúrese que el objeto creado sea un tibble y tenga como nombre “terrorismo” (1 pts). 
+
+```{r}
+library(readr)
+terrorismo <- read_csv("C:/Users/antua/Downloads/actos_terroristas_2.csv")
+View(terrorismo)
+```
+
+```{r}
+#vemos el tipo de data que es
+class(terrorismo)
+```
+
+```{r}
+library(tibble) #Se descarga el paquete tibble y luego se lo llama con la función library
+terrorismo <- as_tibble(terrorismo) #con la función tibble se convierte al data frame en tibble
+class(terrorismo)
+```
+Ya se encuentra como tibble
+
+```{r}
+names(terrorismo)
+```
+
+```{r}
+glimpse(terrorismo)
+```
+
+
+###Pregunta B)
+Presente una tabla simple del número de ataques por año ordenada de mayor a menor. ¿Cuál fue el año con mayor número de ataques terroristas, cuántos hubo? (2pt).
+
+```{r}
+terrorismo$iyear = as.factor(terrorismo$"iyear")
+
+```
+
+```{r}
+library(dplyr)
+terrorismo |>
+  count(iyear)
+```
+
+```{r}
+terrorismo |> 
+  group_by(iyear) |> 
+  count(iyear) |> 
+  arrange(desc(n)) |> 
+  head(5)
+```
+
+
+```{r}
+library(gtsummary)
+terrorismo |> 
+  select(iyear) |>
+  tbl_summary()
+```
+

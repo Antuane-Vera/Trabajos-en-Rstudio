@@ -1,0 +1,15 @@
+---
+title: "clase 02"
+author: "Antuané Vera"
+date: "2023-11-19"
+output: html_document
+---
+
+```{r}
+install.packages("rio")
+```
+
+```{r}
+data_con_rio<-import(resultados_sv_2021.xlsx)
+```
+

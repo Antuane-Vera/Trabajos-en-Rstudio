@@ -1,0 +1,162 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+#PRACTICA 01
+## A) Importe la base de datos, asegúrese que el objeto creado sea un tibble y tenga como nombre “covid1” (1 pts).
+
+```{r}
+library(readxl) #Se descarga el paquete de readxl y luego se llama con la función library
+covid1 <- read.csv("data_covid.csv")
+```
+
+```{r}
+class(covid1) #se identifica que tipo de data es
+```
+la data covid1 esta como data frame
+```{r}
+library(tibble) #Se descarga el paquete tibble y luego se lo llama con la función library
+covid1 <- as_tibble(covid1) #con la función tibble se convierte al data frame en tibble
+class(covid1)
+```
+```{r}
+covid1 
+```
+## B) Describa brevemente la data (tipo de variables, número de casos, etc.)(2pt).
+
+```{r}
+str(covid1) ## Se utiliza la función STR para obtener un resumen conciso de la estructura de la data covid1, de igual forma se puede usar la función glimpse
+```
+La data covid tiene 679,699 filas; esto quiere decir que cuenta con 679,699 casos. Igualmente, se identifican 13 columnas. 
+  Fecha de corte se encuentra como número 
+  UUID se encuentra como número
+  Grupo de riesgo se encuentra como caractér 
+  Edad como número
+  Sexo como caracter(femenino/masculino)
+  Fecha de vacunación como número (número entero)
+  Dosis se encuentra como número
+  Fabricante como caractér
+  Diresa como caractér
+  Departamento como caractér
+  Provincia como caractér
+  Distrito como caractér 
+  Fecha como caractér
+
+```{r}
+names(covid1)
+```
+## C) Cree una nueva data que agregue los datos según fecha para saber el total de vacunados por día. Asígnele como nombre "covid2". (2 pts)
+
+```{r}
+covid1$fecha = as.factor(covid1$fecha) #Como se señalo en el anterior ejercicio la variable de fecha esta identificada como caracter por lo que no se puede ordenar a menos que lo pasemos a factor. 
+```
+
+```{r}
+covid2 <- covid1  #Una vez que la variable ya esta como factor esta puede ser contada
+
+covid2 |>
+  count(fecha) #Con la función count, contamos la frecuencia de los valores en la variable fecha
+```
+
+## D) ¿Qué día se realizó la mayor cantidad de vacunas en Apurímac? Responda utilizando los verbos de paquete dplyr. Utilice el operador pipe en su fraseo (2pt).
+```{r}
+library(dplyr) #Una vez instalado el paquete dplyr, se llama por medio de la función library
+covid2 |>     #se utiliza el operador pipe para realizar varias funciones a la vez, este caso count y arrange 
+  count(fecha) |>
+  arrange(desc(n)) 
+
+```
+Como muestra el resultado el 28-08-2021 se vacunó a la mayor cantidad de personas, un total de 7774. 
+
+## E) ¿Cuáles son los cinco distritos que tiene una mayor población vacunada con la 3ra dosis (top 5)? (2pt)
+
+```{r}
+covid2 |> 
+# para identificar los 5 distritos con mayor población vacuna, primero se agrupará según el distrito; en sengo lugar, se contará la cantidad de vacunas; como tercer paso se filtrará la población vacunada con la tercera dosis; por último, se organizara en orden descendiente con la función arrange
+  group_by(DISTRITO) |> 
+  count(DOSIS) |> 
+  filter(DOSIS == "3") |> 
+  arrange(desc(n)) |> 
+  head(5)
+```
+En base a los resultados, se ve que los 5 distritos con mayor población vacunada son: 
+1. ABANCAY	11805		
+2. ANDAHUAYLAS 5833		
+3. TALAVERA	2264		
+4. SAN JERONIMO	2005		
+5. TAMBURCO	1870	
+
+## F) Explore y presente los principales estadísticos descriptivos (tendencia central y dispersión) de la variable edad. Brinde un análisis
+
+```{r}
+summary(covid2) #Se utiliza la función summary para resumir el minimo, mediana, media, maximo y cantidad de nas (en caso de funciones númericas)
+```
+La Media de la variables edad es de 40,79 años. Este es el promedio de las edades, de las personas vacunadas
+La mediana de la variable edad es 38 años. Este dato es el que se encuentra a la mitad si es que se los ordena de mayor a menor. 
+
+
+```{r}
+covid2 |> #para hallara la varianza se utiliza la función var
+  summarise(Varedad = var(na.omit(EDAD)))
+```
+La varianza es de 382.7292, es decir es la dispersión de los puntos de la variable edad. 
+```{r}
+covid2 |> #para hallar la desviación estaándar se utiliza la función sd
+  summarise(DesEdad = sd(na.omit(EDAD)))
+```
+La desviación estandar es de 19,56347; este dato nos muestra la dispersión de los datos en relación a la media. 
+
+## G) A partir de variable Edad, genere una nueva variable que sea etapa de vida bajo el siguiente esquema: aquellos que sean menores de 30 son "jóvenes", aquellos que son menores de 60 son "adultos" y aquellos que son mayores de 60 son "adultos mayores".(3pts) Genere una tabla de resumen de esta variable en la que aparezca frecuencia y proporción.(2pts).
+
+```{r}
+#A partir de variable Edad, genere una nueva variable que sea etapa de vida bajo el siguiente esquema: aquellos que sean menores de 30 son "jóvenes", aquellos que son menores de 60 son "adultos" y aquellos que son mayores de 60 son "adultos mayores".(3pts)
+
+covid2 <- covid2  |>    #Creamos una variable usando la función mutate
+  mutate(EtapaVida=
+           case_when(EDAD<30~"jóvenes", #el case_when sirve para condicionar los casos
+                     EDAD<60~"adultos",
+                     TRUE   ~"adultos mayores"))
+
+```
+
+```{r}
+#Genere una tabla de resumen de esta variable en la que aparezca frecuencia y proporción.(2pts).
+library(gtsummary) #Se utiliza la función gtsumary para seleccionar la nueva variable creada y viasualizar la cantidad de personas en estas variables
+covid2 |>
+  select(EDAD, EtapaVida)  |>
+  tbl_summary()
+```
+
+
+Hay un total de 234410 personas vacunadas
+adultos	312,851 (46%)
+adultos mayores	132,438 (19%)
+jóvenes	234,410 (34%)
+
+
+## H) Genere una variable que asigne el valor de 1 si la persona pertenece al grupo de riesgo "POBLACIÓN INDÍGENA" y 0 si no pertenece. Cuente cuántos casos de éxito se presentan en la data. Llame a esta variable ES_POB_IND.(2pts)
+
+```{r}
+covid2 <- covid2 |> #utilizamos la misma función mutate con una nueva variable
+  mutate(ES_POB_IND = 
+           case_when(GRUPO_RIESGO== "POBLACION INDIGENA"~ 1,
+                     TRUE   ~ 0))
+```
+
+```{r}
+covid2 |>
+  count(ES_POB_IND)
+#Para encontrar los casos de exito se cuentan los casos en la variables
+```
+Los casos de exito son 4761
+
+
+## I)Genere una tabla gtsummary para las variables edad, sexo, etapa de vida y ES_POB_IND.
+
+```{r}
+covid2 |>
+  select(EDAD, SEXO, EtapaVida, ES_POB_IND)  |>
+  tbl_summary() #Seleccionamos las variables Edad, sexo, EtapaVida
+```

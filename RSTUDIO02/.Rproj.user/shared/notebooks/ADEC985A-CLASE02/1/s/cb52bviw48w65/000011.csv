@@ -1,0 +1,4 @@
+"0","data_con_rio<-import(resultados_sv_2021.xlsx)"
+"2","Error in import(resultados_sv_2021.xlsx) : 
+  could not find function ""import""
+"
